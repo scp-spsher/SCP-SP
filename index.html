@@ -141,7 +141,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
           const linkText = `SCP - ${scpNumber} - ${objectName}`;
 
-        dailySCPElement.innerHTML = `Статья дня: <a href="${dailySCPUrl}">${linkText}</a>`;
+        dailySCPElement.innerHTML = `Статья дня: <a href="${dailySCPUrl}">${linkText} - SP</a>`;
       } catch (error) {
         console.error("Произошла ошибка:", error);
         dailySCPElement.textContent = "Ошибка загрузки статьи дня.";
