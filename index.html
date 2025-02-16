@@ -100,7 +100,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         const scpNumber = availableArticles[randomIndex];
         const dailySCPUrl = baseUrl + scpNumber + "-sp.html";
 
-        return { url: dailySCPUrl, number: scpNumber };
+        return dailySCPUrl;
       }
 
       document.addEventListener('DOMContentLoaded', function() {
