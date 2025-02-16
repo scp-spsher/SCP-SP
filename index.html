@@ -102,12 +102,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
         return dailySCPUrl;
       }
-
+      async function getObjectName(scpNumber) {
+        try {
+          const response = await fetch('objects.json');
+          const data = await response.json();
+          const object = data.find(obj => obj.number === scpNumber);
+          if (object) {
+            return object.name;
+          } else {
+            return "Объект не найден";
+          }
+        } catch (error) {
+          console.error("Ошибка при получении названия объекта:", error);
+          return "Ошибка получения названия";
+        }
+      }
       document.addEventListener('DOMContentLoaded', function() {
         const dailySCPElement = document.getElementById('daily-scp');
         const dailySCPUrl = generateDailySCP();
+        const dailySCPUrl = dailySCP.url;
+        const scpNumber = dailySCP.number;
 
-        dailySCPElement.innerHTML = "Статья дня: <a href='" + dailySCPUrl + "'>" + dailySCPUrl + "</a>";
+        const objectName = await getObjectName(scpNumber);
+
+        const linkText = SCP - ${scpNumber} - (${objectName});
+        dailySCPElement.innerHTML = Статья дня: <a href="scp-sp.ru${dailySCPUrl}">${linkText}</a>;
       });
     </script>
     <script src="script.js"></script>
