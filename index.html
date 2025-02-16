@@ -57,6 +57,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <p>ВЕДЕТСЯ НАБЛЮДЕНИЕ. НАРУШЕНИЯ РЕЖИМА СЕКРЕТНОСТИ ОТСЛЕЖИВАЮТСЯ И КАРАЮТСЯ. ДРУГИХ ПРЕДУПРЕЖДЕНИЙ НЕ БУДЕТ.</p>
             </div>
             <div class="addendum">
+              <h2>Статья дня</h2>
+              <p id="daily-scp">Статья загружается...</p>
+            </div>
+            <div class="addendum">
                 <h2>2024/11/18</h2>
                 <img src="research.png" class="image">
                 <p><i>Научная служба Фонда SCP приглашает Вас присоединиться к исследованию явлений, бросающих вызов привычным представлениям о реальности. - Д-р Роханов</i></p>
@@ -75,6 +79,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </a>
         </article>
     </main>
+    <script>
+      function generateDailySCP() {
+        const baseUrl = "scp-sp.ru/scp-";
+        const availableArticles = [
+          "003", "004", "016", "101", "218", "228", "295", "318", "410", "476", 
+          "718"
+        ];
+        const today = new Date();
+        const seed = today.getFullYear() * 365 + today.getDate();
+        function xorshift(seed) {
+          let x = seed;
+          x ^= x << 13;
+          x ^= x >> 17;
+          x ^= x << 5;
+          return x;
+        }
+
+        const randomIndex = Math.abs(xorshift(seed)) % availableArticles.length;
+        const scpNumber = availableArticles[randomIndex];
+        const dailySCPUrl = baseUrl + scpNumber + "-sp/";
+
+        return dailySCPUrl;
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const dailySCPElement = document.getElementById('daily-scp');
+        const dailySCPUrl = generateDailySCP();
+
+        dailySCPElement.innerHTML = "Статья дня: <a href='" + dailySCPUrl + "'>" + dailySCPUrl + "</a>";
+      });
+    </script>
     <script src="script.js"></script>
 </body>
 </html>
