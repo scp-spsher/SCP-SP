@@ -126,7 +126,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         const objectName = await getObjectName(scpNumber);
 
         const linkText = SCP - ${scpNumber} - (${objectName});
-        dailySCPElement.innerHTML = Статья дня: <a href="scp-sp.ru${dailySCPUrl}">${linkText}</a>;
+        dailySCPElement.innerHTML = "Статья дня: <a href='" + dailySCPUrl + "'>" + "scp-sp.ru" + dailySCPUrl + "</a>";
       });
     </script>
     <script src="script.js"></script>
