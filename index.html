@@ -141,10 +141,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
           const linkText = `SCP - ${scpNumber} - ${objectName}`;
 
-        dailySCPElement.innerHTML = `Статья дня: <a href="scp-sp.ru${dailySCPUrl}">${linkText}</a>`;
-        
-      });
-    </script>
-    <script src="script.js"></script>
+        dailySCPElement.innerHTML = `Статья дня: <a href="${dailySCPUrl}">${linkText}</a>`;
+      } catch (error) {
+        console.error("Произошла ошибка:", error);
+        dailySCPElement.textContent = "Ошибка загрузки статьи дня.";
+      }
+    });
+  </script>
+  <script src="script.js"></script>
 </body>
 </html>
