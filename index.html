@@ -98,7 +98,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
         const randomIndex = Math.abs(xorshift(seed)) % availableArticles.length;
         const scpNumber = availableArticles[randomIndex];
-        const dailySCPUrl = baseUrl + scpNumber + "-sp.html";
+        const dailySCPUrl = baseUrl + scpNumber + "-sp";
 
         return { url: dailySCPUrl, number: scpNumber };
       }
