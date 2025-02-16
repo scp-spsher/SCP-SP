@@ -61,7 +61,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               <p id="daily-scp">Статья загружается...</p>
             </div>
             <div class="addendum">
-                <h2>2024/11/18</h2>
+                <h2>2025/02/16</h2>
                 <img src="research.png" class="image">
                 <p><i>Научная служба Фонда SCP приглашает Вас присоединиться к исследованию явлений, бросающих вызов привычным представлениям о реальности. - Д-р Роханов</i></p>
                 <h2>Смотреть также</h2>
@@ -141,7 +141,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
           const linkText = `SCP - ${scpNumber} - ${objectName}`;
 
-        dailySCPElement.innerHTML = `Статья дня: <a href="${dailySCPUrl}">${linkText} - SP</a>`;
+        dailySCPElement.innerHTML = `Статья дня: <a href="${dailySCPUrl}">${linkText}</a>`;
       } catch (error) {
         console.error("Произошла ошибка:", error);
         dailySCPElement.textContent = "Ошибка загрузки статьи дня.";
