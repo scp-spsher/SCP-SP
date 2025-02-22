@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const urlParams = new URLSearchParams(window.location.search);
   const code = urlParams.get('code');
   if (code) {
-    fetch('http://localhost:5000/api/discord/callback?code=' + code)
+    fetch('https://rohanov.pythonanywhere.com' + code)
       .then(response => response.json())
       .then(data => {
         if (data.success) {
