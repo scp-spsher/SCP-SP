@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
   updateUI();
   
   loginButton.addEventListener('click', function() {
-    fetch('http://localhost:5000/login')
+    fetch('https://rohanov.pythonanywhere.com')
       .then(response => response.json())
       .then(data => {
         if (data.authorization_url) {
