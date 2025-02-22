@@ -136,41 +136,6 @@ th {
   text-align: left;
 }
 
-.header-container {
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 10px;
-}
-
-.auth-buttons {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    display: flex;
-    gap: 10px;
-    z-index: 10;
-}
-
-.auth-buttons .button {
-    background-color: #8B0000;
-    color: white;
-    padding: 10px 20px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 16px;
-    margin: 4px 2px;
-    cursor: pointer;
-    border-radius: 5px;
-    border: none;
-}
-
-.auth-buttons .button:hover {
-    background-color: #660000;
-}
-
 .addendum {
   padding: 10px;
   background-color: var(--addendum-color);
@@ -212,14 +177,6 @@ th {
 
 .button:hover {
   text-decoration: underline;
-}
-
-.button.public {
-    background-color: #e74c3c;
-}
-
-.button.public:hover {
-    background-color: #c0392b;
 }
 
 .image,
