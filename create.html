@@ -61,7 +61,7 @@
             // Замените на URL вашего веб-приложения Google Apps Script
             const scriptURL = 'https://script.google.com/macros/s/AKfycbzL9Ud4Q0GL9SWn_8CtMHXscXFZ0mdkhH_kpic1VOFYcYMQrG936tlLFhVfh97kBmVGDQ/exec';
 
-            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(image) + '&nick=' + encodeURIComponent(nick); // Отправляем URL изображения
+            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(image) + '&nick=' + encodeURIComponent(nick);
 
             try {
                 const response = await fetch(url, {
