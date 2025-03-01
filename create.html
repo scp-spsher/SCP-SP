@@ -5,6 +5,13 @@
     <link href="style.css" rel="stylesheet">
     <link href="icon.png" rel="icon">
     <title>Создать SCP-объект</title>
+    <script src="https://unpkg.com/tesseract.js@v2.1.5/dist/tesseract.min.js"></script> <!-- Подключаем Tesseract.js -->
+    <style>
+        #ocr_status {
+            font-size: smaller;
+            color: gray;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -40,6 +47,9 @@
 
             <label for="image">Изображение:</label>
             <input type="file" id="image" name="image"><br><br>
+            <div id="ocr_status">Ожидание загрузки изображения...</div>
+            <label for="imageText">Текст из изображения:</label>
+            <textarea id="imageText" name="imageText" rows="10" cols="50" readonly></textarea><br><br>
 
             <label for="content">Содержание:</label>
             <textarea id="content" name="content" rows="10" cols="50"></textarea><br><br>
@@ -47,22 +57,48 @@
             <button onclick="saveSCP()" class="button">Сохранить объект</button>
         </article>
     </main>
-    <script src="script.js"></script>
     <script>
         let imageDataURL = null;
-        function handleImageUpload(input) {
+        let ocrText = ""; // Переменная для хранения текста, полученного OCR
+
+        async function handleImageUpload(input) {
             const file = input.files[0];
+            const ocrStatus = document.getElementById('ocr_status');
+            const imageTextarea = document.getElementById('imageText');
+
             if (file) {
                 const reader = new FileReader();
 
-                reader.onload = function(e) {
+                reader.onload = async function(e) {
                     imageDataURL = e.target.result; // Сохраняем Data URL
-                    console.log("Изображение загружено и преобразовано в Data URL");
+
+                    ocrStatus.textContent = "Запуск OCR...";
+                    imageTextarea.value = ""; // Очищаем textarea перед новым OCR
+
+                    try {
+                        const { data: { text } } = await Tesseract.recognize(
+                            imageDataURL,
+                            'rus', // Язык текста на изображении.  Установите нужный язык.
+                            { logger: m => console.log(m) } // Вывод прогресса в консоль
+                        );
+
+                        ocrText = text;
+                        imageTextarea.value = text;
+                        ocrStatus.textContent = "OCR завершен.";
+
+                    } catch (error) {
+                        console.error("Ошибка OCR:", error);
+                        ocrStatus.textContent = "Ошибка OCR: " + error.message;
+                        ocrText = "Ошибка OCR"; // Или другое сообщение об ошибке
+                    }
+
                 }
 
                 reader.readAsDataURL(file); // Преобразуем файл в Data URL
             } else {
                 imageDataURL = null; // Если файл не выбран, сбрасываем
+                ocrText = "";
+                imageTextarea.value = "";
             }
         }
 
@@ -76,18 +112,19 @@
             const objectClass = document.getElementById('objectClass').value;
             const content = document.getElementById('content').value;
 
+
             // Замените на URL вашего веб-приложения Google Apps Script
             const scriptURL = 'https://script.google.com/macros/s/AKfycbzL9Ud4Q0GL9SWn_8CtMHXscXFZ0mdkhH_kpic1VOFYcYMQrG936tlLFhVfh97kBmVGDQ/exec';
 
-            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(imageDataURL);
+            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&imageText=' + encodeURIComponent(ocrText); // Отправляем OCR текст
 
             try {
                 const response = await fetch(url, {
-                    method: 'POST', // Важно использовать POST для отправки данных
-                    mode: 'no-cors', // Отключаем CORS (это может быть необходимо для Google Apps Script)
+                    method: 'POST',
+                    mode: 'no-cors',
                 });
 
-                if (response.ok || response.status === 0) { // Проверяем response.status === 0
+                if (response.ok || response.status === 0) {
                     alert('SCP-объект успешно сохранен!');
                     window.location.href = 'polygon.html';
                 } else {
@@ -100,5 +137,6 @@
             }
         }
     </script>
+    <script src="script.js"></script>
 </body>
 </html>
