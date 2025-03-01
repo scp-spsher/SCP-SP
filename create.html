@@ -60,7 +60,10 @@
     <script>
         let imageDataURL = null;
         let ocrText = ""; // Переменная для хранения текста, полученного OCR
-
+        let imgurURL = null; // Переменная для хранения URL Imgur
+        
+        const imgurClientID = '5d521fd92355602';
+        
         async function handleImageUpload(input) {
             const file = input.files[0];
             const ocrStatus = document.getElementById('ocr_status');
@@ -102,9 +105,49 @@
             }
         }
 
-        document.getElementById('image').addEventListener('change', function() {
-            handleImageUpload(this);
+        document.getElementById('image').addEventListener('change', async function() {
+            await handleImageUpload(this);
+            imgurURL = await uploadImageToImgur(imageDataURL); // Загружаем на Imgur и получаем URL
         });
+
+        async function uploadImageToImgur(imageData) {
+            // Замените на свой Client-ID Imgur
+            const imgurClientID = 'YOUR_IMGUR_CLIENT_ID';
+            const apiUrl = 'https://api.imgur.com/3/image';
+
+            if (!imageData) {
+                console.warn("Нет изображения для загрузки в Imgur.");
+                return null;
+            }
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Client-ID ${imgurClientID}`,
+                        'Content-Type': 'application/json' // Укажите тип контента как JSON
+                    },
+                    body: JSON.stringify({ image: imageData.split(',')[1] }) // Отправляем только base64 часть Data URL
+                });
+
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log("Изображение успешно загружено в Imgur:", data.data.link);
+                    return data.data.link;
+                } else {
+                    console.error("Ошибка загрузки изображения в Imgur:", data.data.error);
+                    alert("Ошибка загрузки изображения в Imgur: " + data.data.error);
+                    return null;
+                }
+            } catch (error) {
+                console.error("Произошла ошибка при загрузке в Imgur:", error);
+                alert("Произошла ошибка при загрузке в Imgur: " + error.message);
+                return null;
+            }
+        }
+
 
         async function saveSCP() {
             const title = document.getElementById('title').value;
@@ -112,11 +155,10 @@
             const objectClass = document.getElementById('objectClass').value;
             const content = document.getElementById('content').value;
 
-
             // Замените на URL вашего веб-приложения Google Apps Script
             const scriptURL = 'https://script.google.com/macros/s/AKfycbzL9Ud4Q0GL9SWn_8CtMHXscXFZ0mdkhH_kpic1VOFYcYMQrG936tlLFhVfh97kBmVGDQ/exec';
 
-            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&imageText=' + encodeURIComponent(ocrText); // Отправляем OCR текст
+            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&imageText=' + encodeURIComponent(ocrText) + '&imageURL=' + encodeURIComponent(imgurURL); // Отправляем OCR текст и URL Imgur
 
             try {
                 const response = await fetch(url, {
