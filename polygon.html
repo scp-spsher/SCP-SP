@@ -39,10 +39,58 @@
         </article>
     </main>
     <script src="script.js"></script>
-    <script src="polygon.js"></script> <!-- Подключаем новый скрипт -->
     <script>
+        async function displayExistingSCPs() {
+            const scpListDiv = document.getElementById('scp-list');
+            scpListDiv.innerHTML = ''; // Очищаем список
+
+            // Замените на URL вашего веб-приложения Google Apps Script
+            const scriptURL = 'https://script.google.com/macros/s/AKfycbzL9Ud4Q0GL9SWn_8CtMHXscXFZ0mdkhH_kpic1VOFYcYMQrG936tlLFhVfh97kBmVGDQ/exec';
+
+            try {
+                const response = await fetch(scriptURL + '?action=getSCPs');
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    if (data.result === 'success') {
+                        const scpObjects = data.data;
+
+                        scpObjects.forEach(scpObject => {
+                            const scpDiv = document.createElement('div');
+                            scpDiv.className = "addendum";
+
+                            // Форматирование контента (пример)
+                            let formattedContent = 
+                                <h2>Объект</h2>
+                                <p>SCP-${scpObject["SCP Number"]}</p>
+                                <h2>Класс объекта</h2>
+                                <p><a href="object-classes">${scpObject["Object Class"]}</a></p>
+                                ${scpObject.Image ? <img src="${scpObject.Image}" class="image" alt="${scpObject.Title}"> : ''}
+                                <h2>${scpObject.Title}</h2>
+                                ${scpObject.Content}
+                            ;
+
+                            scpDiv.innerHTML = formattedContent;
+                            scpListDiv.appendChild(scpDiv);
+                        }
+                        );
+                    } else {
+                        console.error('Ошибка получения данных:', data.error);
+                        scpListDiv.innerHTML = '<p>Ошибка загрузки данных.</p>';
+                    }
+                } else {
+                    console.error('Ошибка HTTP:', response.status);
+                    scpListDiv.innerHTML = '<p>Ошибка загрузки данных.</p>';
+                }
+            } catch (error) {
+                console.error('Ошибка запроса:', error);
+                scpListDiv.innerHTML = '<p>Произошла ошибка при загрузке данных.</p>';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
-            displayExistingSCPs(); // Функция из scp-create.js
+            displayExistingSCPs();
         });
     </script>
 </body>
