@@ -153,6 +153,8 @@ th {
     display: flex;
     gap: 10px;
     z-index: 10;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .auth-button {
