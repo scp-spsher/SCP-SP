@@ -47,11 +47,58 @@
             <button onclick="saveSCP()" class="button">Сохранить объект</button>
         </article>
     </main>
-    <script src="polygon.js"></script>
+    <script src="script.js"></script>
     <script>
+        let imageDataURL = null;
+        function handleImageUpload(input) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    imageDataURL = e.target.result; // Сохраняем Data URL
+                    console.log("Изображение загружено и преобразовано в Data URL");
+                }
+
+                reader.readAsDataURL(file); // Преобразуем файл в Data URL
+            } else {
+                imageDataURL = null; // Если файл не выбран, сбрасываем
+            }
+        }
+
         document.getElementById('image').addEventListener('change', function() {
             handleImageUpload(this);
         });
+
+        async function saveSCP() {
+            const title = document.getElementById('title').value;
+            const scpNumber = document.getElementById('scpNumber').value;
+            const objectClass = document.getElementById('objectClass').value;
+            const content = document.getElementById('content').value;
+
+            // Замените на URL вашего веб-приложения Google Apps Script
+            const scriptURL = 'https://script.google.com/macros/s/AKfycbzL9Ud4Q0GL9SWn_8CtMHXscXFZ0mdkhH_kpic1VOFYcYMQrG936tlLFhVfh97kBmVGDQ/exec';
+
+            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(imageDataURL);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST', // Важно использовать POST для отправки данных
+                    mode: 'no-cors', // Отключаем CORS (это может быть необходимо для Google Apps Script)
+                });
+
+                if (response.ok || response.status === 0) { // Проверяем response.status === 0
+                    alert('SCP-объект успешно сохранен!');
+                    window.location.href = 'polygon.html';
+                } else {
+                    alert('Ошибка сохранения: ' + response.status);
+                }
+
+            } catch (error) {
+                console.error('Ошибка отправки запроса:', error);
+                alert('Произошла ошибка при сохранении SCP-объекта.');
+            }
+        }
     </script>
 </body>
 </html>
