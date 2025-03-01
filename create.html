@@ -43,6 +43,9 @@
             <label for="content">Содержание:</label>
             <textarea id="content" name="content" rows="50" cols="250"></textarea><br><br>
 
+            <label for="nick">Ваш никнейм</label>
+            <input type="text" id="nick" name="nick"><br><br>
+
             <button onclick="saveSCP()" class="button">Сохранить объект</button>
         </article>
     </main>
@@ -53,11 +56,12 @@
             const objectClass = document.getElementById('objectClass').value;
             const content = document.getElementById('content').value;
             const image = document.getElementById('image').value; // Получаем URL изображения
+            const nick = document.getElementById('nick').value;
 
             // Замените на URL вашего веб-приложения Google Apps Script
             const scriptURL = 'https://script.google.com/macros/s/AKfycbzL9Ud4Q0GL9SWn_8CtMHXscXFZ0mdkhH_kpic1VOFYcYMQrG936tlLFhVfh97kBmVGDQ/exec';
 
-            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(image); // Отправляем URL изображения
+            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(image) + '&nick=' + encodeURIComponent(nick); // Отправляем URL изображения
 
             try {
                 const response = await fetch(url, {
