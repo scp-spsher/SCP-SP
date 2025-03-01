@@ -40,6 +40,9 @@
     </main>
     <script src="script.js"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            displayExistingSCPs();
+        });
         async function displayExistingSCPs() {
             const scpListDiv = document.getElementById('scp-list');
             scpListDiv.innerHTML = ''; // Очищаем список
