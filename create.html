@@ -5,7 +5,7 @@
     <link href="style.css" rel="stylesheet">
     <link href="icon.png" rel="icon">
     <title>Создать SCP-объект</title>
-    <script src="https://unpkg.com/tesseract.js@v2.1.5/dist/tesseract.min.js"></script> <!-- Подключаем Tesseract.js -->
+    <script src="https://unpkg.com/tesseract.js@v2.1.5/dist/tesseract.min.js"></script>
     <style>
         #ocr_status {
             font-size: smaller;
@@ -32,7 +32,7 @@
             <input type="text" id="title" name="title"><br><br>
 
             <label for="scpNumber">Номер SCP:</label>
-            <input type="text" id="scpNumber" name="scpNumber"><br><br> <!-- Добавлено поле для номера SCP -->
+            <input type="text" id="scpNumber" name="scpNumber"><br><br>
 
             <label for="objectClass">Класс объекта:</label>
             <input type="text" id="objectClass" name="objectClass"><br><br>
@@ -52,25 +52,29 @@
             const scpNumber = document.getElementById('scpNumber').value;
             const objectClass = document.getElementById('objectClass').value;
             const content = document.getElementById('content').value;
-            const image = document.getElementById('image').value; 
-            const nick = document.getElementById('nick').value;
+            const image = document.getElementById('image').value;
 
             // Замените на URL вашего веб-приложения Google Apps Script
             const scriptURL = 'https://script.google.com/macros/s/AKfycbzL9Ud4Q0GL9SWn_8CtMHXscXFZ0mdkhH_kpic1VOFYcYMQrG936tlLFhVfh97kBmVGDQ/exec';
 
-            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(image) + '&nick=' + encodeURIComponent(nick);
+            const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(image);
 
             try {
                 const response = await fetch(url, {
                     method: 'POST',
-                    mode: 'no-cors',
+                    // Убрали mode: 'no-cors'
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded' // Важно для POST запросов
+                    }
                 });
 
-                if (response.ok || response.status === 0) {
+                const data = await response.json(); // Обработка JSON ответа
+
+                if (response.ok) {
                     alert('SCP-объект успешно сохранен!');
-                    window.location.href = 'polygon';
+                    window.location.href = 'polygon'; // Перенаправление на страницу polygon
                 } else {
-                    alert('Ошибка сохранения: ' + response.status);
+                    alert('Ошибка сохранения: ' + response.status + ' ' + data.error); // Вывод ошибки из JSON ответа
                 }
 
             } catch (error) {
