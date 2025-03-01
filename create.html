@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    <link href="style.css" rel="stylesheet">
+    <link href="icon.png" rel="icon">
+    <title>Создать SCP-объект</title>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <a href="http://scp-sp.ru">
+                <img src="shapka.png" id="banner">
+            </a>
+            <div class="auth-buttons">
+                <a href="#" class="button auth-button">Войти</a>
+                <a href="#" class="button auth-button">Зарегистрироваться</a>
+            </div>
+        </div>
+    </header>
+    <main id="main">
+        <nav>
+            <!-- Ваша навигация -->
+        </nav>
+        <article>
+            <h1>Создать SCP-объект</h1>
+
+            <label for="title">Название:</label>
+            <input type="text" id="title" name="title"><br><br>
+
+            <label for="scpNumber">Номер SCP:</label>
+            <input type="text" id="scpNumber" name="scpNumber"><br><br> <!-- Добавлено поле для номера SCP -->
+
+            <label for="objectClass">Класс объекта:</label>
+            <select id="objectClass" name="objectClass">
+                <option value="Безопасный">Безопасный</option>
+                <option value="Евклид">Евклид</option>
+                <option value="Кетер">Кетер</option>
+                <option value="Таумиэль">Таумиэль</option>
+                <option value="Архонт">Архонт</option>
+                <option value="Нейтрализованный">Нейтрализованный</option>
+                <option value="Обоснованный">Обоснованный</option>
+            </select><br><br>
+
+            <label for="image">Изображение:</label>
+            <input type="file" id="image" name="image"><br><br>
+
+            <label for="content">Содержание:</label>
+            <textarea id="content" name="content" rows="10" cols="50"></textarea><br><br>
+
+            <button onclick="saveSCP()" class="button">Сохранить объект</button>
+        </article>
+    </main>
+    <script src="scp-create.js"></script>  <!-- Подключаем новый скрипт -->
+    <script>
+        document.getElementById('image').addEventListener('change', function() {
+            handleImageUpload(this); // Функция из scp-create.js
+        });
+    </script>
+</body>
+</html>
