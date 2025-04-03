@@ -290,4 +290,23 @@ textarea {
   .icon.big {
     width: 150px;
   }
+    
+main input[type="text"] {
+  font-size: 20px;           /* Установите желаемый размер шрифта */
+  font-family: "JetBrains Mono", monospace; /* Используем ваш шрифт */
+  padding: 5px;            /* Добавляем отступ внутри поля */
+  border: 1px solid #ccc;   /* Задаем рамку */
+  box-sizing: border-box;  /* Важно, чтобы padding не увеличивал ширину */
+  width: 100%;            /* Занимаем всю доступную ширину */
+}
+
+main textarea#content {
+  font-size: 18px;           /*  Чуть меньше для textarea (по желанию) */
+  font-family: "JetBrains Mono", monospace; /* Используем ваш шрифт */
+  padding: 5px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  width: 100%;
+}
+
 }
