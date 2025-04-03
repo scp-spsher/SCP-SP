@@ -272,10 +272,20 @@ th {
     width: 100%;
     float: none;
 
-  textarea {
-    font-size: 16px;
-    margin: 0 0 40px;
-  }
+ input[type="text"],
+ textarea {
+  font-size: 42px;
+  padding: 5px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  width: 100%;
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* Если хотите, чтобы у textarea был немного другой размер: */
+textarea {
+    font-size: 42px; /*  Например, немного меньше, чем у input */
+}
 
   .icon.big {
     width: 150px;
