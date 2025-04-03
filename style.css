@@ -271,6 +271,9 @@ th {
   .image {
     width: 100%;
     float: none;
+
+  textarea {
+    font-size: 16px;
     margin: 0 0 40px;
   }
 
