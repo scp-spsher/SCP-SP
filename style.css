@@ -272,41 +272,14 @@ th {
     width: 100%;
     float: none;
 
- input[type="text"],
- textarea {
-  font-size: 42px;
-  padding: 5px;
-  border: 1px solid #ccc;
-  box-sizing: border-box;
-  width: 100%;
-  font-family: "JetBrains Mono", monospace;
-}
-
-/* Если хотите, чтобы у textarea был немного другой размер: */
-textarea {
-    font-size: 42px; /*  Например, немного меньше, чем у input */
-}
-
-  .icon.big {
-    width: 150px;
-  }
-    
-main input[type="text"] {
-  font-size: 20px;           /* Установите желаемый размер шрифта */
-  font-family: "JetBrains Mono", monospace; /* Используем ваш шрифт */
-  padding: 5px;            /* Добавляем отступ внутри поля */
-  border: 1px solid #ccc;   /* Задаем рамку */
-  box-sizing: border-box;  /* Важно, чтобы padding не увеличивал ширину */
-  width: 100%;            /* Занимаем всю доступную ширину */
-}
-
-main textarea#content {
-  font-size: 18px;           /*  Чуть меньше для textarea (по желанию) */
-  font-family: "JetBrains Mono", monospace; /* Используем ваш шрифт */
-  padding: 5px;
-  border: 1px solid #ccc;
-  box-sizing: border-box;
-  width: 100%;
+  .input {
+  font-size: 32px;
+  font-size: max(16px, 1em);
+  font-family: inherit;
+  padding: 0.25em 0.5em;
+  background-color: #fff;
+  border: 2px solid var(--input-border);
+  border-radius: 4px;
 }
 
 }
