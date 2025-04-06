@@ -54,6 +54,12 @@ main {
   box-shadow: 0 0 10px 10px var(--primary-color);
 }
 
+textarea#content {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
 nav {
   position: sticky;
   top: 40px;
@@ -271,12 +277,6 @@ th {
   .image {
     width: 100%;
     float: none;
-
-  textarea#content {
-  width: 100%;
-  box-sizing: border-box;
-  resize: vertical;
-}
 
   .input {
     font-size: 32px;
