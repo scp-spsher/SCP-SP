@@ -146,6 +146,7 @@
                     <a href="#" class="formatting-button" onclick="formatText('teletype'); return false;"><tt>М</tt></a>
                     <a href="#" class="formatting-button" onclick="formatText('sup'); return false;"><sup>В</sup></a>
                     <a href="#" class="formatting-button" onclick="formatText('sub'); return false;"><sub>Н</sub></a>
+                    <a href="#" class="formatting-button" onclick="insertSymbol('█'); return false;">█</a>
                     <button onclick="saveSCP()" class="button">Сохранить объект</button>
                 </div>
             </div>
@@ -196,6 +197,18 @@
 
             content.selectionStart = selectionStart;
             content.selectionEnd = selectionStart + replacementText.length;
+
+            content.focus();
+
+            function insertSymbol(symbol) {
+            const content = document.getElementById('content');
+            const selectionStart = content.selectionStart;
+            const selectionEnd = content.selectionEnd;
+
+            content.value = content.value.substring(0, selectionStart) + symbol + content.value.substring(selectionEnd);
+
+            content.selectionStart = selectionStart + symbol.length;
+            content.selectionEnd = content.selectionStart;
 
             content.focus();
         }
