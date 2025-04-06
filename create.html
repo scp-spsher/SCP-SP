@@ -140,7 +140,7 @@
                 <div class="formatting-buttons">
                     <a href="#" class="formatting-button" onclick="formatText('bold'); return false;"><b>Ж</b></a>
                     <a href="#" class="formatting-button" onclick="formatText('italic'); return false;"><i>K</i></a>
-                    <a href="#" class="formatting-button" onclick="formatText('italic'); return false;"><i><b>ЖK</b></i></a>
+                    <a href="#" class="formatting-button" onclick="formatText('boldItalic'); return false;"><i><b>ЖK</b></i></a>
                     <button onclick="saveSCP()" class="button">Сохранить объект</button>
                 </div>
             </div>
@@ -167,7 +167,7 @@
                 case 'italic':
                     replacementText = `//${selectedText}//`;
                     break;
-                case 'bold-italic':
+                case 'boldItalic':
                     replacementText = `//**${selectedText}**//`;
                     break;
             }
@@ -188,7 +188,6 @@
             const content = document.getElementById('content').value;
             const image = document.getElementById('image').value;
 
-            // Замените на URL вашего веб-приложения Google Apps Script
             const scriptURL = 'https://script.google.com/macros/s/AKfycbzL9Ud4Q0GL9SWn_8CtMHXscXFZ0mdkhH_kpic1VOFYcYMQrG936tlLFhVfh97kBmVGDQ/exec';
 
             const url = scriptURL + '?action=saveSCP&title=' + encodeURIComponent(title) + '&scpNumber=' + encodeURIComponent(scpNumber) + '&objectClass=' + encodeURIComponent(objectClass) + '&content=' + encodeURIComponent(content) + '&image=' + encodeURIComponent(image);
