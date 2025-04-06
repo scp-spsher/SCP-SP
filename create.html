@@ -12,7 +12,6 @@
             color: gray;
         }
 
-        /* Дополнительные стили для соответствия общей стилистике (можно добавить в style.css) */
         label {
             display: block;
             margin-bottom: 5px;
@@ -26,19 +25,19 @@
             margin-bottom: 15px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            box-sizing: border-box; /* Важно, чтобы padding не увеличивал ширину */
+            box-sizing: border-box;
             font-size: 16px;
             background-color: #f8f8f8;
             color: #333;
         }
 
         textarea {
-            height: 200px; /* Увеличьте высоту textarea для удобства */
-            resize: vertical; /* Разрешить изменение высоты */
+            height: 200px;
+            resize: vertical;
         }
 
         .button {
-            background-color: #4CAF50; /* Зеленый цвет кнопки */
+            background-color: #4CAF50;
             color: white;
             padding: 12px 20px;
             border: none;
@@ -55,9 +54,31 @@
 
         article {
             padding: 20px;
-            background-color: #fff; /* Или другой цвет фона, соответствующий вашему стилю */
+            background-color: #fff;
             border: 1px solid #ddd;
             border-radius: 5px;
+        }
+
+        .formatting-buttons {
+            margin-bottom: 10px;
+        }
+
+        .formatting-button {
+            background-color: #ddd;
+            color: #333;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold; /* Для кнопки "Ж" */
+            margin-right: 5px; /* Отступ между кнопками */
+            display: inline-block;
+            text-decoration: none; /* Убирает подчеркивание для ссылок, если используете <a> */
+        }
+
+        .formatting-button:hover {
+            background-color: #ccc;
         }
 
     </style>
@@ -115,12 +136,42 @@
                 <input type="text" id="image" name="image"><br>
 
                 <label for="content">Содержание:</label>
+                <div class="formatting-buttons">
+                    <a href="#" class="formatting-button" onclick="formatText('bold'); return false;">Ж</a>
+                    <button onclick="saveSCP()" class="button">Сохранить объект</button>
+                </div>
                 <textarea id="content" name="content"></textarea><br>
-
-                <button onclick="saveSCP()" class="button">Сохранить объект</button>
             </div>
         </article>
     </main>
+    <script>
+        function formatText(command) {
+            const content = document.getElementById('content');
+            const selectionStart = content.selectionStart;
+            const selectionEnd = content.selectionEnd;
+
+            if (selectionStart === selectionEnd) {
+                alert("Пожалуйста, выделите текст, который вы хотите отформатировать.");
+                return;
+            }
+
+            const selectedText = content.value.substring(selectionStart, selectionEnd);
+            let replacementText = "";
+
+            switch (command) {
+                case 'bold':
+                    replacementText = `**${selectedText}**`;
+                    break;
+            }
+
+            content.value = content.value.substring(0, selectionStart) + replacementText + content.value.substring(selectionEnd);
+
+            content.selectionStart = selectionStart;
+            content.selectionEnd = selectionStart + replacementText.length;
+
+            content.focus();
+        }
+    </script>
     <script>
         async function saveSCP() {
             const title = document.getElementById('title').value;
