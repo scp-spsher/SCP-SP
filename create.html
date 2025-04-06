@@ -197,10 +197,10 @@
 
             content.selectionStart = selectionStart;
             content.selectionEnd = selectionStart + replacementText.length;
-
             content.focus();
+        }
 
-            function insertSymbol(symbol) {
+        function insertSymbol(symbol) {
             const content = document.getElementById('content');
             const selectionStart = content.selectionStart;
             const selectionEnd = content.selectionEnd;
