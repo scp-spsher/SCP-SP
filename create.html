@@ -11,6 +11,55 @@
             font-size: smaller;
             color: gray;
         }
+
+        /* Дополнительные стили для соответствия общей стилистике (можно добавить в style.css) */
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Важно, чтобы padding не увеличивал ширину */
+            font-size: 16px;
+            background-color: #f8f8f8;
+            color: #333;
+        }
+
+        textarea {
+            height: 200px; /* Увеличьте высоту textarea для удобства */
+            resize: vertical; /* Разрешить изменение высоты */
+        }
+
+        .button {
+            background-color: #4CAF50; /* Зеленый цвет кнопки */
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .button:hover {
+            background-color: #3e8e41;
+        }
+
+        article {
+            padding: 20px;
+            background-color: #fff; /* Или другой цвет фона, соответствующий вашему стилю */
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
     </style>
 </head>
 <body>
@@ -23,26 +72,53 @@
     </header>
     <main id="main">
         <nav>
-            <!-- Ваша навигация -->
+            <div class="addendum">
+                <h2>Информация</h2>
+                <ul>
+                    <li><a href="info">О Фонде</a></li>
+                    <li><a href="object-classes">Классы объектов</a></li>
+                    <li><a href="access-levels">Уровни допуска</a></li>
+                    <li><a href="personnel-classes">Классы персонала</a></li>
+                                        <li><a href="services">Внутренние службы</a></li>
+                    <li><a href="sites">Учреждения Фонда</a></li>
+                    <li><a href="organizations">Связанные организации</a></li>
+                </ul>
+            </div>
+            <div class="addendum">
+                <h2>Объекты</h2>
+                <ul>
+                    <li><a href="objects">Объекты SCP-SP</a></li>
+                    <li><a href="original-objects">Объекты SCP</a></li>
+                </ul>
+            </div>
+            <div class="addendum">
+                <h2>Полигон</h2>
+                <ul>
+                    <li><a href="create">Написать объект</a></li>
+                    <li><a href="polygon">Объекты Полигона</a></li>
+                </ul>
+            </div>
         </nav>
         <article>
-            <h1>Создать SCP-объект</h1>
-            <label for="title">Название:</label>
-            <input type="text" id="title" name="title" style="font-size: 16px;"><br><br>
-            
-            <label for="scpNumber">Номер SCP:</label>
-            <input type="text" id="scpNumber" name="scpNumber" style="font-size: 16px;"><br><br>
- 
-            <label for="objectClass">Класс объекта:</label>
-            <input type="text" id="objectClass" name="objectClass" style="font-size: 16px;"><br><br>
- 
-            <label for="image">Ссылка на изображение (Не обязательно):</label>
-            <input type="text" id="image" name="image" style="font-size: 16px;"><br><br>
+            <div class="addendum">
+                <h2>Создать SCP-объект</h2>
+                <label for="title">Название:</label>
+                <input type="text" id="title" name="title"><br>
 
-            <label for="content">Содержание:</label>
-            <textarea id="content" name="content" rows="50" width="100%" style="font-size: 16px;"></textarea><br><br>
-            
-            <button onclick="saveSCP()" class="button">Сохранить объект</button>
+                <label for="scpNumber">Номер SCP:</label>
+                <input type="text" id="scpNumber" name="scpNumber"><br>
+
+                <label for="objectClass">Класс объекта:</label>
+                <input type="text" id="objectClass" name="objectClass"><br>
+
+                <label for="image">Ссылка на изображение (Не обязательно):</label>
+                <input type="text" id="image" name="image"><br>
+
+                <label for="content">Содержание:</label>
+                <textarea id="content" name="content"></textarea><br>
+
+                <button onclick="saveSCP()" class="button">Сохранить объект</button>
+            </div>
         </article>
     </main>
     <script>
@@ -61,19 +137,18 @@
             try {
                 const response = await fetch(url, {
                     method: 'POST',
-                    // Убрали mode: 'no-cors'
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded' // Важно для POST запросов
+                        'Content-Type': 'application/x-www-form-urlencoded'
                     }
                 });
 
-                const data = await response.json(); // Обработка JSON ответа
+                const data = await response.json();
 
                 if (response.ok) {
                     alert('SCP-объект успешно сохранен!');
-                    window.location.href = 'polygon'; // Перенаправление на страницу polygon
+                    window.location.href = 'polygon';
                 } else {
-                    alert('Ошибка сохранения: ' + response.status + ' ' + data.error); // Вывод ошибки из JSON ответа
+                    alert('Ошибка сохранения: ' + response.status + ' ' + data.error);
                 }
 
             } catch (error) {
