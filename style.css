@@ -272,6 +272,12 @@ th {
     width: 100%;
     float: none;
 
+  textarea#content {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
   .input {
     font-size: 32px;
     font-size: max(16px, 1em);
