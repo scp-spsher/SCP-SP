@@ -145,6 +145,7 @@
                     <a href="#" class="formatting-button" onclick="formatText('strike'); return false;"><s>З</s></a>
                     <a href="#" class="formatting-button" onclick="formatText('teletype'); return false;"><tt>М</tt></a>
                     <a href="#" class="formatting-button" onclick="formatText('sup'); return false;"><sup>В</sup></a>
+                    <a href="#" class="formatting-button" onclick="formatText('sub'); return false;"><sub>Н</sub></a>
                     <button onclick="saveSCP()" class="button">Сохранить объект</button>
                 </div>
             </div>
@@ -185,6 +186,9 @@
                     break;
                 case 'sup':
                     replacementText = `^^${selectedText}^^`;
+                    break;
+                case 'sub':
+                    replacementText = `,,${selectedText},,`;
                     break;
             }
 
