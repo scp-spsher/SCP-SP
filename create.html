@@ -140,6 +140,7 @@
                 <div class="formatting-buttons">
                     <a href="#" class="formatting-button" onclick="formatText('bold'); return false;"><b>Ж</b></a>
                     <a href="#" class="formatting-button" onclick="formatText('italic'); return false;"><i>K</i></a>
+                    <a href="#" class="formatting-button" onclick="formatText('italic'); return false;"><i><b>ЖK</b></i></a>
                     <button onclick="saveSCP()" class="button">Сохранить объект</button>
                 </div>
             </div>
@@ -165,6 +166,9 @@
                     break;
                 case 'italic':
                     replacementText = `//${selectedText}//`;
+                    break;
+                case 'bold-italic':
+                    replacementText = `//**${selectedText}**//`;
                     break;
             }
 
