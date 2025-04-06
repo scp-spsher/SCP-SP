@@ -139,6 +139,7 @@
                 <textarea id="content" name="content"></textarea><br>
                 <div class="formatting-buttons">
                     <a href="#" class="formatting-button" onclick="formatText('bold'); return false;"><b>Ж</b></a>
+                    <a href="#" class="formatting-button" onclick="formatText('italic'); return false;"><i>K</i></a>
                     <button onclick="saveSCP()" class="button">Сохранить объект</button>
                 </div>
             </div>
@@ -161,6 +162,9 @@
             switch (command) {
                 case 'bold':
                     replacementText = `**${selectedText}**`;
+                    break;
+                case 'italic':
+                    replacementText = `*${selectedText}*`;
                     break;
             }
 
