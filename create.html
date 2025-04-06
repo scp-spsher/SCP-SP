@@ -143,6 +143,7 @@
                     <a href="#" class="formatting-button" onclick="formatText('boldItalic'); return false;"><i><b>ЖK</b></i></a>
                     <a href="#" class="formatting-button" onclick="formatText('underline'); return false;"><u>П</u></a>
                     <a href="#" class="formatting-button" onclick="formatText('strike'); return false;"><s>З</s></a>
+                    <a href="#" class="formatting-button" onclick="formatText('teletype'); return false;"><tt>М</tt></a>
                     <button onclick="saveSCP()" class="button">Сохранить объект</button>
                 </div>
             </div>
@@ -177,6 +178,9 @@
                     break;
                 case 'strike':
                     replacementText = `--${selectedText}--`;
+                    break;
+                case 'teletype':
+                    replacementText = `{{${selectedText}}}`;
                     break;
             }
 
