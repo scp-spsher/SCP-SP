@@ -146,6 +146,7 @@
                     <a href="#" class="formatting-button" title="Моноширинный" onclick="formatText('teletype'); return false;"><tt>М</tt></a>
                     <a href="#" class="formatting-button" title="Верхний индекс" onclick="formatText('sup'); return false;"><sup>В</sup></a>
                     <a href="#" class="formatting-button" title="Нижний индекс" onclick="formatText('sub'); return false;"><sub>Н</sub></a>
+                    <a href="#" class="formatting-button" title="Код" onclick="formatText('code'); return false;"><code>К</code></a>
                     <a href="#" class="formatting-button" onclick="insertSymbol('█'); return false;">█</a>
                     <button onclick="saveSCP()" class="button">Сохранить объект</button>
                 </div>
@@ -190,6 +191,9 @@
                     break;
                 case 'sub':
                     replacementText = `,,${selectedText},,`;
+                    break;
+                case 'code':
+                    replacementText = `[[${selectedText}]]`;
                     break;
             }
 
