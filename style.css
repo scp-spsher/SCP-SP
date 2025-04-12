@@ -274,36 +274,27 @@ th {
     max-width: 100%;
   }
 
-  .footer-panel {
+  .banner-links {
     display: flex;
-    justify-content: flex-start; /* Размещает ссылки в начале строки */
-    background-color: var(--secondary-color);
-    color: var(--primary-color);
-    padding: 10px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px 10px var(--primary-color);
-    margin-top: 20px;
-    font-size: 14px;
-    line-height: 20px;
+    justify-content: center; /* Центрируем кнопки */
+    gap: 10px; /* Расстояние между кнопками */
+    margin-top: 10px; /* Отступ от баннера */
 }
 
-.footer-link {
-    color: rgb(107, 0, 0); /* Цвет ссылок из остального текста */
+.banner-button {
+    display: inline-flex; /* Используем inline-flex для размеров по контенту */
+    justify-content: center;
+    align-items: center;
+    color: var(--secondary-color);
+    background-color: var(--primary-color);
+    padding: 5px 10px; /* Меньше padding, чтобы кнопки были меньше */
+    border-radius: 5px;
     text-decoration: none;
-    margin-right: 20px; /* Отступ между ссылками */
+    font-size: 14px; /* Меньше размер шрифта */
 }
 
-.footer-link:hover {
+.banner-button:hover {
     text-decoration: underline;
-}
-
-@media (max-width: 768px) {
-    .footer-panel {
-        justify-content: center; /* Выравнивает по центру на маленьких экранах */
-    }
-    .footer-link {
-        margin-right: 10px; /* Меньше отступ на маленьких экранах */
-    }
 }
 
 
