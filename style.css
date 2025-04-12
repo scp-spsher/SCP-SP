@@ -274,7 +274,7 @@ th {
     max-width: 100%;
   }
 
-    .footer-tabs {
+  .footer-tabs {
     background-color: var(--secondary-color);
     color: var(--primary-color);
     border-radius: 10px;
