@@ -274,46 +274,38 @@ th {
     max-width: 100%;
   }
 
-  .footer-tabs {
+  .footer-panel {
+    display: flex;
+    justify-content: flex-start; /* Размещает ссылки в начале строки */
     background-color: var(--secondary-color);
     color: var(--primary-color);
+    padding: 10px;
     border-radius: 10px;
     box-shadow: 0 0 10px 10px var(--primary-color);
     margin-top: 20px;
-    padding: 20px;
+    font-size: 14px;
+    line-height: 20px;
 }
 
-  .tab-buttons {
-    display: flex;
-    margin-bottom: 10px;
+.footer-link {
+    color: rgb(107, 0, 0); /* Цвет ссылок из остального текста */
+    text-decoration: none;
+    margin-right: 20px; /* Отступ между ссылками */
 }
 
-  .tab-button {
-    background-color: var(--addendum-color);
-    color: var(--primary-color);
-    border: none;
-    padding: 10px 20px;
-    cursor: pointer;
-    border-radius: 5px;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 16px;
-    margin-right: 10px; /* Отступ между кнопками */
+.footer-link:hover {
+    text-decoration: underline;
 }
 
-  .tab-button:hover {
-    background-color: #d1d0d0; /* Светлее при наведении */
+@media (max-width: 768px) {
+    .footer-panel {
+        justify-content: center; /* Выравнивает по центру на маленьких экранах */
+    }
+    .footer-link {
+        margin-right: 10px; /* Меньше отступ на маленьких экранах */
+    }
 }
 
-  .tab-button.active {
-    background-color: var(--primary-color);
-    color: var(--secondary-color);
-}
-
-  .tab-content {
-    padding: 10px;
-    border: 1px solid var(--primary-color); /* Рамка вокруг контента */
-    border-radius: 5px;
-}
 
   .image {
     width: 100%;
