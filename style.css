@@ -152,6 +152,16 @@ th {
   overflow: hidden;
 }
 
+.footer-bar {
+      background-color: black;
+      color: white;
+      display: flex;          /*  Делаем контейнер flexbox */
+      justify-content: flex-end; /*  Выравниваем элементы по правому краю */
+      align-items: center;    /*  Выравниваем элементы по вертикали по центру */
+      padding: 10px;
+      border-radius: 10px 10px 0 0;
+    }
+
 .auth-buttons {
   position: absolute;
   top: 10px;
