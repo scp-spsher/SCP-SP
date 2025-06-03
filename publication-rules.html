@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    <link href="style.css" rel="stylesheet">
+    <link href="icon.png" rel="icon">
+    <title>Безопасный</title>
+<style>
+    .footer-bar {
+      background-color: black;
+      color: white;
+      display: flex;          /*  Делаем контейнер flexbox */
+      justify-content: flex-end; /*  Выравниваем элементы по правому краю */
+      align-items: center;    /*  Выравниваем элементы по вертикали по центру */
+      padding: 10px;
+      border-radius: 10px 10px 0 0;
+    }
+    /*  Стили для вкладок (Правила сайта и Автору) */
+    .footer-tab {
+      margin-left: 20px;       /*  Отступ между вкладками */
+      cursor: pointer;
+      position: relative;     /*  Для позиционирования выпадающего списка */
+    }
+
+    .footer-tab a {
+      color: white;
+      text-decoration: none;
+    }
+
+    /* Стили для выпадающих списков (общие) */
+    .dropdown-content {
+      display: none;          /*  Скрываем по умолчанию */
+      position: absolute;      /*  Абсолютное позиционирование относительно .footer-tab */
+      background-color: black;
+      min-width: 160px;
+      box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+      z-index: 1;             /*  Обеспечиваем отображение поверх других элементов */
+      right: 0;               /*  Выравниваем по правому краю вкладки */
+    }
+
+    .dropdown-content a {
+      color: white;
+      padding: 12px 16px;
+      text-decoration: none;
+      display: block;         /*  Занимают всю ширину выпадающего списка */
+    }
+
+    .dropdown-content a:hover {
+      background-color: #333;
+    }
+
+    /*  Показываем выпадающий список при наведении */
+    .footer-tab:hover .dropdown-content {
+      display: block;        /*  Делаем видимым */
+      animation: slideIn 0.3s ease-in-out; /*  Анимация плавного появления */
+    }
+
+    /* Анимация появления */
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+</style>
+</head>
+<body>
+    <header>
+        <a href="http://scp-sp.ru">
+            <img src="shapka.png" id="banner">
+        </a>
+    </header>
+    <div class="footer-bar">
+        <div class="footer-tab">
+            <a href="#">Правила сайта</a>
+            <div class="dropdown-content">
+                <a href="#">Правила публикации</a>
+                <a href="#">Контакты администрации</a>
+                <a href="#">Часто задаваемые вопросы</a>
+            </div>
+        </div>
+        <div class="footer-tab">
+            <a href="#">Автору</a>
+            <div class="dropdown-content">
+                <a href="how-to-write">Как написать объект</a>
+                <a href="#">Оформление</a>
+            </div>
+        </div>
+    </div>
+    <main id="main">
+        <nav>
+            <div class="addendum">
+                <h2>Содержание</h2>
+                <ul>
+                    <li><a href="#main">Начало</a></li>
+                    <li><a href="#box">Правило коробки</a></li>
+                </ul>
+            </div>
+        </nav>
+        <article>
+            <img src="safe.png" class="icon big">
+            <p>Классификация "Безопасный" присваивается объектам или субъектам, которые хранятся надёжно и эффективно. "Безопасный" может требовать определённых мер сдерживания, но это не значит, что ожидаются опасные ситуации. В противном случае классификация может быть пересмотрена.</p>
+            <p>Некоторые "Безопасные" - люди, гуманоиды или иные разумные существа. Чтобы предотвратить возможные травмы или смерти персонала Фонда, взаимодействие с ними должно быть вежливым и профессиональным. Также должны приниматься во внимание процедуры их содержания.</p>
+            <p>С некоторыми "Безопасными" объектами разрешено контактировать любому сотруднику Фонда, причём в некоторых случаях независимо от уровня допуска, на другие же накладываются различные ограничения.  "Безопасные" - единственные объекты, с которыми имеют право контактировать сотрудники с уровнем допуска 5, но только при соблюдении всех мер предосторожности.</p>
+            <p>Следует отметить, что классификация "Безопасный" не означает, что процедуры содержания не нужны. Многие такие объекты могут быть весьма опасными в определённых условиях.</p>
+            <h2 id="box">Правило коробки</h2>
+            <p><i>Если положить объект в коробку и ничего не произойдет, то этот объект "Безопасный".</i></p>
+        </article>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>
