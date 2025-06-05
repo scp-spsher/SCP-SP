@@ -213,6 +213,15 @@
         document.addEventListener('DOMContentLoaded', function() {
             const video = document.getElementById('video-bg');
             video.play().catch(e => console.log("Автовоспроизведение запрещено:", e));
+
+            const loginBtn = document.querySelector('.scp-login-btn');
+            loginBtn.addEventListener('click', function() {
+                this.style.backgroundColor = '#600';
+                setTimeout(() => {
+                    this.style.backgroundColor = '#c00';
+                    // Здесь можно добавить код авторизации
+                }, 300);
+            });
         });
     </script>
 </body>
