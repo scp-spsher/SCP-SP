@@ -6,16 +6,25 @@
     <link href="icon.png" rel="icon">
     <title>██████████████████████████</title>
 <style>
-    .footer-bar {
-      background-color: black;
-      color: white;
-      display: flex;          /*  Делаем контейнер flexbox */
-      justify-content: flex-end; /*  Выравниваем элементы по правому краю */
-      align-items: center;    /*  Выравниваем элементы по вертикали по центру */
-      padding: 10px;
-      border-radius: 10px 10px 0 0;
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: black;
     }
-
+    
+    /* Шапка и навигация - обычные, без видеофона */
+    header, .footer-bar {
+        background-color: black;
+    }
+    
+    /* Основная часть с видеофоном */
+    main {
+        position: relative;
+        width: 100%;
+        min-height: calc(100vh - 120px); /* Учитываем высоту шапки и навигации */
+        overflow: hidden;
+    }
+    
     #video-bg {
         position: absolute;
         top: 0;
@@ -25,18 +34,44 @@
         object-fit: cover;
         z-index: -1;
     }
-
-    #main {
+    
+    article {
         position: relative;
-        width: 100%;
-        min-height: calc(100vh - 120px); /* Учитываем высоту шапки и навигации */
-        overflow: hidden;
+        z-index: 1;
+        color: white;
+        padding: 20px;
     }
-    /*  Стили для вкладок (Правила сайта и Автору) */
+    
+    .warning {
+        background-color: rgba(0, 0, 0, 0.7);
+        padding: 20px;
+        border: 2px solid red;
+    }
+
+    /* Стили для шапки */
+    header {
+        padding: 10px 0;
+    }
+    
+    #banner {
+        display: block;
+        margin: 0 auto;
+        max-width: 100%;
+    }
+
+    /* Стили для панели навигации */
+    .footer-bar {
+      color: white;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 10px;
+    }
+
     .footer-tab {
-      margin-left: 20px;       /*  Отступ между вкладками */
+      margin-left: 20px;
       cursor: pointer;
-      position: relative;     /*  Для позиционирования выпадающего списка */
+      position: relative;
     }
 
     .footer-tab a {
@@ -44,35 +79,32 @@
       text-decoration: none;
     }
 
-    /* Стили для выпадающих списков (общие) */
     .dropdown-content {
-      display: none;          /*  Скрываем по умолчанию */
-      position: absolute;      /*  Абсолютное позиционирование относительно .footer-tab */
+      display: none;
+      position: absolute;
       background-color: black;
       min-width: 160px;
       box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-      z-index: 1;             /*  Обеспечиваем отображение поверх других элементов */
-      right: 0;               /*  Выравниваем по правому краю вкладки */
+      z-index: 1;
+      right: 0;
     }
 
     .dropdown-content a {
       color: white;
       padding: 12px 16px;
       text-decoration: none;
-      display: block;         /*  Занимают всю ширину выпадающего списка */
+      display: block;
     }
 
     .dropdown-content a:hover {
       background-color: #333;
     }
 
-    /*  Показываем выпадающий список при наведении */
     .footer-tab:hover .dropdown-content {
-      display: block;        /*  Делаем видимым */
-      animation: slideIn 0.3s ease-in-out; /*  Анимация плавного появления */
+      display: block;
+      animation: slideIn 0.3s ease-in-out;
     }
 
-    /* Анимация появления */
     @keyframes slideIn {
       from {
         opacity: 0;
