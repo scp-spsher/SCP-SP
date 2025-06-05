@@ -98,6 +98,13 @@
         border: 2px solid red;
     }
 
+    .warning-line {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin: 5px 0;
+    }
+
     /* Стили для шапки */
     header {
         padding: 10px 0;
@@ -175,18 +182,20 @@
       </video>
         <article>
           <div class="warning">
-            <p>
-              <strong>ПРЕДСТАВЛЕННЫЕ ДАЛЕЕ МАТЕРИАЛЫ</strong>
-            </p>
-            <p>
-              <strong>СТРОГО ЗАСЕКРЕЧЕНЫ</strong>
-            </p>
-            <p>
-              <strong>ВЕДЕТСЯ НАБЛЮДЕНИЕ. НАРУШЕНИЯ РЕЖИМА СЕКРЕТНОСТИ ОТСЛЕЖИВАЮТСЯ И КАРАЮТСЯ. ДРУГИХ ПРЕДУПРЕЖДЕНИЙ НЕ БУДЕТ.</strong>
-            </p>
-            <p>
-              <strong><font color="red">Фонд следит за вами.</font></strong>
-            </p>
+              <div class="warning-line">
+                <p>
+                  <strong>ПРЕДСТАВЛЕННЫЕ ДАЛЕЕ МАТЕРИАЛЫ</strong>
+                </p>
+                <p>
+                  <strong>СТРОГО ЗАСЕКРЕЧЕНЫ</strong>
+                </p>
+                <p>
+                  <strong>ВЕДЕТСЯ НАБЛЮДЕНИЕ. НАРУШЕНИЯ РЕЖИМА СЕКРЕТНОСТИ ОТСЛЕЖИВАЮТСЯ И КАРАЮТСЯ. ДРУГИХ ПРЕДУПРЕЖДЕНИЙ НЕ БУДЕТ.</strong>
+                </p>
+                <p>
+                  <strong><font color="red">Фонд следит за вами.</font></strong>
+                </p>
+              </div>
           </div>
           <button class="scp-login-btn" onclick="window.open('https://discord.gg/9gBEuF5tVs', '_blank')">
             АВТОРИЗОВАТЬСЯ КАК СОТРУДНИК
