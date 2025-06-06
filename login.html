@@ -13,16 +13,14 @@
         text-align: center;
     }
     
-    /* Шапка и навигация - обычные, без видеофона */
     header, .footer-bar {
         background-color: black;
     }
     
-    /* Основная часть с видеофоном */
     main {
         position: relative;
         width: 100%;
-        min-height: calc(100vh - 120px); /* Учитываем высоту шапки и навигации */
+        min-height: calc(100vh - 120px);
         overflow: hidden;
         display: flex;
         flex-direction: column;
@@ -59,7 +57,6 @@
         transform: scale(0.98);
     }
 
-    /* Эффект "опасности" */
     .scp-login-btn::after {
         content: "";
         position: absolute;
@@ -105,7 +102,6 @@
         margin: 5px 0;
     }
 
-    /* Стили для шапки */
     header {
         padding: 10px 0;
     }
@@ -117,7 +113,6 @@
         z-index: 1;
     }
 
-    /* Стили для панели навигации */
     .footer-bar {
       color: white;
       display: flex;
@@ -213,7 +208,6 @@
                 this.style.backgroundColor = '#600';
                 setTimeout(() => {
                     this.style.backgroundColor = '#c00';
-                    // Здесь можно добавить код авторизации
                 }, 300);
             });
         });
