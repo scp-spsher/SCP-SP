@@ -6,11 +6,6 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   
   return {
-    // base: '/' — для Vercel это значение по умолчанию
-    server: {
-      port: 3000,
-      host: '0.0.0.0',
-    },
     plugins: [react()],
     define: {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
