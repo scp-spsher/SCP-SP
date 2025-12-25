@@ -34,6 +34,94 @@ export const authService = {
     }
   },
 
+  // Refresh session data from Source of Truth (DB or LocalStorage Registry)
+  refreshSession: async (): Promise<StoredUser | null> => {
+    const currentSession = authService.getSession();
+    if (!currentSession) return null;
+
+    const isTargetAdmin = currentSession.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+    // 1. DATABASE REFRESH
+    if (isSupabaseConfigured()) {
+      try {
+        // Try to select all fields first
+        let { data: profile, error } = await supabase!
+          .from('personnel')
+          .select('*')
+          .eq('id', currentSession.id)
+          .maybeSingle();
+
+        // Handle missing columns error (Schema mismatch)
+        if (error && error.code === '42703') {
+             const retry = await supabase!
+                .from('personnel')
+                .select('id, name, clearance, registered_at, is_approved, avatar_url')
+                .eq('id', currentSession.id)
+                .maybeSingle();
+             profile = retry.data;
+             error = retry.error;
+        }
+
+        if (error) {
+             console.warn("Session Refresh DB Error:", error);
+             // Return current session if DB is unreachable (Offline tolerance)
+             return currentSession; 
+        }
+
+        if (profile) {
+            // If user exists in DB, update session
+            // Check Approval
+            if (!profile.is_approved && !isTargetAdmin) return null; // Force Logout
+
+            const updatedUser: StoredUser = {
+                ...currentSession,
+                name: profile.name,
+                clearance: isTargetAdmin ? 6 : profile.clearance,
+                is_approved: profile.is_approved,
+                // Optional fields
+                title: profile.title || currentSession.title,
+                department: profile.department || currentSession.department,
+                site: profile.site || currentSession.site,
+                avatar_url: profile.avatar_url || currentSession.avatar_url,
+                registeredAt: profile.registered_at || currentSession.registeredAt
+            };
+            
+            localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
+            return updatedUser;
+        } else {
+            // User not found in DB (Deleted?)
+            // If we are relying on DB, this means account is gone.
+            return null;
+        }
+      } catch (e) {
+        return currentSession;
+      }
+    }
+
+    // 2. LOCAL FALLBACK REFRESH
+    const localData = localStorage.getItem(STORAGE_KEY);
+    if (localData) {
+        const users: StoredUser[] = JSON.parse(localData);
+        const freshData = users.find(u => u.id === currentSession.id || (u.email && u.email === currentSession.email));
+        
+        if (freshData) {
+             if (!freshData.is_approved && !isTargetAdmin) return null;
+
+             const updatedUser: StoredUser = {
+                 ...currentSession,
+                 ...freshData,
+                 // Ensure Admin
+                 clearance: isTargetAdmin ? 6 : freshData.clearance,
+                 isSuperAdmin: isTargetAdmin
+             };
+             localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
+             return updatedUser;
+        }
+    }
+
+    return currentSession;
+  },
+
   // Register a new user
   register: async (email: string, name: string, password: string, clearance: number): Promise<{ success: boolean; message: string }> => {
     
@@ -131,11 +219,26 @@ export const authService = {
 
         if (authData.user) {
           // Fetch Profile including is_approved and avatar_url
+          // We try to fetch everything first
           let { data: profile, error: dbError } = await supabase!
             .from('personnel')
             .select('id, name, clearance, registered_at, is_approved, avatar_url, title, department, site')
             .eq('id', authData.user.id)
             .maybeSingle();
+          
+          // ERROR HANDLING: 42703 = Column does not exist
+          // If the DB schema isn't updated yet, fall back to basic fields so user can still login
+          if (dbError && dbError.code === '42703') {
+             console.warn("DB Schema mismatch: Missing new columns. Falling back to basic profile fetch.");
+             const retry = await supabase!
+                .from('personnel')
+                .select('id, name, clearance, registered_at, is_approved, avatar_url') // Removed title/dept/site
+                .eq('id', authData.user.id)
+                .maybeSingle();
+             
+             profile = retry.data;
+             dbError = retry.error;
+          }
             
           if (dbError) {
               console.error("Login Profile Fetch Error:", JSON.stringify(dbError, null, 2));
