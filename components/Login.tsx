@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Shield, Lock, User, Key, UserPlus, LogIn, AlertCircle, Mail } from 'lucide-react';
+import { Lock, User, Key, UserPlus, LogIn, AlertCircle, Mail } from 'lucide-react';
 import { authService, StoredUser } from '../services/authService';
 import { isSupabaseConfigured } from '../services/supabaseClient';
+import { SCPLogo } from './SCPLogo';
 
 interface LoginProps {
   onLogin: (user: StoredUser) => void;
@@ -86,8 +87,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         {/* Header */}
         <div className="text-center mb-8 border-b border-gray-800 pb-6 relative">
           
-          <div className="mx-auto w-16 h-16 mb-4 text-scp-text border-2 border-scp-text rounded-full flex items-center justify-center animate-pulse-slow">
-            <Shield size={32} />
+          <div className="mx-auto w-20 h-20 mb-4 text-scp-text flex items-center justify-center animate-pulse-slow">
+            <SCPLogo className="w-full h-full" />
           </div>
           <h1 className="text-2xl font-bold tracking-[0.3em] mb-1">SCPNET</h1>
           <p className="text-[10px] text-gray-500 tracking-widest">
