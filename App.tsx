@@ -21,9 +21,29 @@ const App: React.FC = () => {
   // Defaults to 6 (Omni) for SuperAdmin, or user's actual clearance
   const [simulatedClearance, setSimulatedClearance] = useState<number>(1);
 
+  // Sync user data with backend/storage on load
+  useEffect(() => {
+    const syncSession = async () => {
+      if (currentUser) {
+        const freshUser = await authService.refreshSession();
+        if (!freshUser) {
+           // User deleted or unapproved
+           authService.logout();
+           setCurrentUser(null);
+        } else {
+           // User data possibly updated
+           setCurrentUser(freshUser);
+        }
+      }
+    };
+    syncSession();
+  }, []); // Run once on mount
+
   useEffect(() => {
     if (currentUser) {
        // If super admin, default to 6, otherwise use actual clearance
+       // Only update simulated clearance if it matches the previous reality (prevent overriding manual changes if we added that feature later)
+       // For now, simple logic:
        setSimulatedClearance(currentUser.isSuperAdmin ? 6 : currentUser.clearance);
     }
   }, [currentUser]);
@@ -58,7 +78,7 @@ const App: React.FC = () => {
       case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
       case 'reports': return <Reports />;
-      case 'admin': return <AdminPanel />;
+      case 'admin': return <AdminPanel currentUser={currentUser} />;
       case 'guide': return <Guide />;
       default: return <Dashboard currentClearance={simulatedClearance} />;
     }
