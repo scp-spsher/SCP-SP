@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { ShieldAlert, Check, X, RefreshCw, UserCheck, AlertOctagon, FileText, Save, ArrowLeft, Trash2, Briefcase, MapPin, Hash, User, Database, Copy, Terminal } from 'lucide-react';
 import { StoredUser } from '../services/authService';
+import { SCPLogo } from './SCPLogo';
 
 const STORAGE_KEY = 'scp_net_users';
 
@@ -325,7 +326,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
         <div className="flex-1 overflow-y-auto bg-scp-panel border border-gray-800 p-8 relative">
            {/* Watermark */}
            <div className="absolute top-10 right-10 opacity-5 pointer-events-none">
-              <ShieldAlert size={200} />
+              <SCPLogo className="w-56 h-56" />
            </div>
 
            <div className="max-w-3xl mx-auto space-y-8 relative z-10">
