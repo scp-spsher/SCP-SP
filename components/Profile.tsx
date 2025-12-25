@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { StoredUser, authService } from '../services/authService';
 import { User, Shield, MapPin, Briefcase, Crown, Upload, Camera } from 'lucide-react';
+import { SCPLogo } from './SCPLogo';
 
 interface ProfileProps {
   user: StoredUser;
@@ -65,15 +66,15 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
       <div className={`w-full bg-black border-2 ${cardColor} p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] relative overflow-hidden transition-all duration-500`}>
         {/* Holographic overlay effect */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none"></div>
-        <div className="absolute top-4 right-4 opacity-20">
-          <Shield size={100} />
+        <div className="absolute top-4 right-4 opacity-10 text-gray-500">
+          <SCPLogo className="w-32 h-32" />
         </div>
 
         {/* Card Header */}
-        <div className="flex justify-between items-start border-b border-gray-800 pb-4 mb-6">
+        <div className="flex justify-between items-start border-b border-gray-800 pb-4 mb-6 relative z-10">
           <div className="flex items-center gap-3">
-             <div className="w-12 h-12 border border-current rounded-full flex items-center justify-center opacity-80">
-                {isSimulatedAdmin ? <Crown size={24} className="text-yellow-500" /> : <Shield size={24} className={textColor} />}
+             <div className="w-12 h-12 border border-current rounded-full flex items-center justify-center opacity-80 overflow-hidden p-1">
+                {isSimulatedAdmin ? <Crown size={24} className="text-yellow-500" /> : <SCPLogo className={textColor} />}
              </div>
              <div>
                <h3 className="font-bold text-lg tracking-widest text-white">ФОНД SCP</h3>
@@ -89,7 +90,7 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
         </div>
 
         {/* Card Body */}
-        <div className="flex flex-col md:flex-row gap-8">
+        <div className="flex flex-col md:flex-row gap-8 relative z-10">
            {/* Photo Area */}
            <div className="shrink-0 flex flex-col items-center gap-2">
               <div 
