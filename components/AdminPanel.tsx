@@ -12,6 +12,7 @@ interface AdminUser {
   title?: string;
   department?: string;
   site?: string;
+  avatar_url?: string;
 }
 
 const AdminPanel: React.FC = () => {
@@ -195,8 +196,12 @@ const AdminPanel: React.FC = () => {
               {/* STATUS HEADER */}
               <div className="flex justify-between items-start bg-black/50 p-6 border border-gray-700">
                  <div className="flex items-center gap-4">
-                    <div className="w-20 h-24 bg-gray-900 border border-gray-600 flex items-center justify-center">
-                       <User size={40} className="text-gray-600" />
+                    <div className="w-20 h-24 bg-gray-900 border border-gray-600 flex items-center justify-center overflow-hidden">
+                       {editForm.avatar_url ? (
+                          <img src={editForm.avatar_url} className="w-full h-full object-cover grayscale" />
+                       ) : (
+                          <User size={40} className="text-gray-600" />
+                       )}
                     </div>
                     <div>
                        <h3 className="text-xl font-bold text-white mb-1">{editForm.name}</h3>
