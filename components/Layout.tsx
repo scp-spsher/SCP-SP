@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { 
-  ShieldAlert, 
   Database, 
   Terminal, 
   MessageSquare, 
@@ -15,6 +14,7 @@ import {
   ChevronDown,
   Users
 } from 'lucide-react';
+import { SCPLogo } from './SCPLogo';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -64,8 +64,8 @@ const Layout: React.FC<LayoutProps> = ({
       {/* Sidebar - Desktop */}
       <aside className={`hidden md:flex flex-col w-64 border-r ${borderColor} bg-scp-panel z-10 transition-all duration-500`}>
         <div className={`p-6 border-b ${borderColor} flex flex-col items-center relative`}>
-          <div className={`w-16 h-16 border-2 rounded-full flex items-center justify-center mb-3 transition-colors duration-500 ${logoColor}`}>
-             {isO5View ? <Eye size={32} className="animate-pulse-slow" /> : <ShieldAlert size={32} />}
+          <div className={`w-20 h-20 mb-3 transition-colors duration-500 ${isO5View ? 'text-yellow-500' : 'text-scp-text'}`}>
+             {isO5View ? <Eye size={64} className="animate-pulse-slow mx-auto" /> : <SCPLogo className="w-full h-full" />}
           </div>
           <h1 className={`text-xl font-bold tracking-widest text-center transition-colors duration-500 ${isO5View ? 'text-yellow-500' : ''}`}>
             {isSuperAdmin && simulatedClearance === 6 ? 'SCPNET [ADMIN]' : (isO5View ? 'SCPNET [O5]' : 'SCPNET')}
@@ -154,7 +154,13 @@ const Layout: React.FC<LayoutProps> = ({
         {/* Mobile Header */}
         <header className={`md:hidden flex items-center justify-between p-4 border-b ${borderColor} bg-scp-panel z-20`}>
           <div className="flex items-center">
-            {isO5View ? <Eye size={24} className="mr-2 text-yellow-500" /> : <ShieldAlert size={24} className="mr-2 text-scp-text" />}
+            {isO5View ? (
+              <Eye size={24} className="mr-2 text-yellow-500" />
+            ) : (
+              <div className="w-6 h-6 mr-2 text-scp-text">
+                <SCPLogo className="w-full h-full" />
+              </div>
+            )}
             <span className={`font-bold tracking-widest ${isO5View ? 'text-yellow-500' : ''}`}>SCPNET</span>
           </div>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
