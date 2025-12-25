@@ -1,0 +1,80 @@
+import React, { useState, useEffect } from 'react';
+import { SecurityClearance } from './types';
+import Login from './components/Login';
+import Layout from './components/Layout';
+import Dashboard from './components/Dashboard';
+import Database from './components/Database';
+import SecureChat from './components/SecureChat';
+import TerminalComponent from './components/Terminal';
+import Reports from './components/Reports';
+import Guide from './components/Guide';
+import Profile from './components/Profile';
+import AdminPanel from './components/AdminPanel';
+import { authService, StoredUser } from './services/authService';
+
+const App: React.FC = () => {
+  // Initialize state based on active session in localStorage
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
+  const [currentPage, setCurrentPage] = useState('dashboard');
+  
+  // State for Admin Simulation (View As)
+  // Defaults to 6 (Omni) for SuperAdmin, or user's actual clearance
+  const [simulatedClearance, setSimulatedClearance] = useState<number>(1);
+
+  useEffect(() => {
+    if (currentUser) {
+       // If super admin, default to 6, otherwise use actual clearance
+       setSimulatedClearance(currentUser.isSuperAdmin ? 6 : currentUser.clearance);
+    }
+  }, [currentUser]);
+
+  const isAuthenticated = !!currentUser;
+
+  const handleLogin = (user: StoredUser) => {
+    setCurrentUser(user);
+    setCurrentPage('dashboard');
+  };
+
+  const handleLogout = () => {
+    authService.logout();
+    setCurrentUser(null);
+    setCurrentPage('dashboard');
+    setSimulatedClearance(1);
+  };
+
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  const renderContent = () => {
+    switch (currentPage) {
+      case 'dashboard': return <Dashboard currentClearance={simulatedClearance} />;
+      case 'profile': return <Profile user={currentUser} currentClearance={simulatedClearance} />;
+      case 'database': return <Database />;
+      case 'comms': return <SecureChat />;
+      case 'terminal': return <TerminalComponent />;
+      case 'reports': return <Reports />;
+      case 'admin': return <AdminPanel />;
+      case 'guide': return <Guide />;
+      default: return <Dashboard currentClearance={simulatedClearance} />;
+    }
+  };
+
+  return (
+    <Layout 
+      currentPage={currentPage} 
+      onNavigate={setCurrentPage} 
+      onLogout={handleLogout}
+      userClearance={currentUser.clearance} // Real Clearance (for reference)
+      simulatedClearance={simulatedClearance} // View As Clearance
+      setSimulatedClearance={setSimulatedClearance}
+      userEmail={currentUser.id}
+      realEmail={currentUser.email}
+      isSuperAdmin={currentUser.isSuperAdmin}
+    >
+      {renderContent()}
+    </Layout>
+  );
+};
+
+export default App;
