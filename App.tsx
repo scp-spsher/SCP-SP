@@ -42,6 +42,10 @@ const App: React.FC = () => {
     setSimulatedClearance(1);
   };
 
+  const handleProfileUpdate = (updatedUser: StoredUser) => {
+    setCurrentUser(updatedUser);
+  };
+
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
   }
@@ -49,7 +53,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentPage) {
       case 'dashboard': return <Dashboard currentClearance={simulatedClearance} />;
-      case 'profile': return <Profile user={currentUser} currentClearance={simulatedClearance} />;
+      case 'profile': return <Profile user={currentUser} currentClearance={simulatedClearance} onProfileUpdate={handleProfileUpdate} />;
       case 'database': return <Database />;
       case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
