@@ -1,13 +1,17 @@
-import React from 'react';
-import { StoredUser } from '../services/authService';
-import { User, Shield, MapPin, Briefcase, Crown } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { StoredUser, authService } from '../services/authService';
+import { User, Shield, MapPin, Briefcase, Crown, Upload, Camera } from 'lucide-react';
 
 interface ProfileProps {
   user: StoredUser;
   currentClearance: number;
+  onProfileUpdate?: (user: StoredUser) => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ user, currentClearance }) => {
+const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpdate }) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Use simulated clearance for visuals
   const isSimulatedO5 = currentClearance >= 5;
   const isSimulatedAdmin = currentClearance === 6;
@@ -15,8 +19,40 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance }) => {
   const cardColor = isSimulatedO5 ? 'border-yellow-500' : 'border-gray-600';
   const textColor = isSimulatedO5 ? 'text-yellow-500' : 'text-scp-text';
   
-  // Generate a safe pseudo-hash for visuals that doesn't reveal the email
+  // Generate a safe pseudo-hash for visuals
   const safeHash = user.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0).toString(16).toUpperCase().padEnd(16, '0');
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert("ОШИБКА: ФАЙЛ ПРЕВЫШАЕТ ЛИМИТ 2MB");
+      return;
+    }
+
+    setIsUploading(true);
+    
+    // Call Service
+    const result = await authService.uploadAvatar(user.id, file);
+
+    if (result.success && result.url) {
+       // Create updated user object
+       const updatedUser = { ...user, avatar_url: result.url };
+       if (onProfileUpdate) {
+         onProfileUpdate(updatedUser);
+       }
+    } else {
+       alert(result.message);
+    }
+    
+    setIsUploading(false);
+  };
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[500px] animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -56,10 +92,38 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance }) => {
         <div className="flex flex-col md:flex-row gap-8">
            {/* Photo Area */}
            <div className="shrink-0 flex flex-col items-center gap-2">
-              <div className="w-32 h-40 bg-gray-900 border border-gray-700 flex items-center justify-center relative overflow-hidden">
-                 <User size={64} className="text-gray-700" />
+              <div 
+                className="w-32 h-40 bg-gray-900 border border-gray-700 flex items-center justify-center relative overflow-hidden group cursor-pointer"
+                onClick={handleAvatarClick}
+              >
+                 {user.avatar_url ? (
+                    <img src={user.avatar_url} alt="Profile" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all" />
+                 ) : (
+                    <User size={64} className="text-gray-700" />
+                 )}
+                 
                  {/* Fake noise */}
-                 <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+                 <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none"></div>
+                 
+                 {/* Upload Overlay */}
+                 <div className={`absolute inset-0 bg-black/60 flex flex-col items-center justify-center transition-opacity ${isUploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    {isUploading ? (
+                        <div className="w-6 h-6 border-2 border-scp-terminal border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                        <>
+                           <Camera className="text-scp-terminal mb-1" size={24} />
+                           <span className="text-[9px] text-scp-terminal font-mono uppercase">Обновить</span>
+                        </>
+                    )}
+                 </div>
+                 
+                 <input 
+                   type="file" 
+                   ref={fileInputRef} 
+                   className="hidden" 
+                   accept="image/*"
+                   onChange={handleFileChange}
+                 />
               </div>
               <div className="w-32 text-center">
                 <div className="text-[8px] text-gray-500 uppercase">Код верификации</div>
@@ -108,8 +172,6 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance }) => {
                   {isSimulatedAdmin ? 'Зона-01' : (isSimulatedO5 ? '[УДАЛЕНО]' : (user.site || 'Зона-19'))}
                 </div>
               </div>
-              
-              {/* ID Field removed for security privacy */}
            </div>
         </div>
 
