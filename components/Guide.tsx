@@ -1,5 +1,6 @@
 import React from 'react';
 import { BookOpen, Shield, Database, MessageSquare, Terminal, FileText } from 'lucide-react';
+import { SCPLogo } from './SCPLogo';
 
 const Guide: React.FC = () => {
   return (
@@ -17,8 +18,8 @@ const Guide: React.FC = () => {
       </div>
 
       <div className="bg-scp-panel border border-gray-800 p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-5">
-          <Shield size={120} />
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+          <SCPLogo className="w-32 h-32" />
         </div>
         <h2 className="text-xl font-bold text-scp-terminal mb-4 flex items-center gap-2 relative z-10">
           <Shield size={20} /> 1. УРОВНИ ДОПУСКА (SECURITY CLEARANCE)
