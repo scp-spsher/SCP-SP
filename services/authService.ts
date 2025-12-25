@@ -20,11 +20,8 @@ export interface StoredUser {
   title?: string;
   department?: string;
   site?: string;
-  image?: string;
+  avatar_url?: string; // Changed from 'image' to 'avatar_url' for Storage support
 }
-
-// NO FALLBACK USERS - DB ONLY AS REQUESTED
-const FALLBACK_USERS: StoredUser[] = [];
 
 export const authService = {
   // Check if a user is currently logged in (Session Persistence)
@@ -71,8 +68,6 @@ export const authService = {
 
           if (dbError) {
              console.error("DB Register Error:", JSON.stringify(dbError, null, 2));
-             // If we can't write to DB (e.g. recursion), but Auth created the user, we might be in an inconsistent state.
-             // But usually RLS allows INSERT.
           }
         }
         
@@ -135,17 +130,16 @@ export const authService = {
         }
 
         if (authData.user) {
-          // Fetch Profile including is_approved
+          // Fetch Profile including is_approved and avatar_url
           let { data: profile, error: dbError } = await supabase!
             .from('personnel')
-            .select('id, name, clearance, registered_at, is_approved')
+            .select('id, name, clearance, registered_at, is_approved, avatar_url, title, department, site')
             .eq('id', authData.user.id)
             .maybeSingle();
             
           if (dbError) {
               console.error("Login Profile Fetch Error:", JSON.stringify(dbError, null, 2));
               
-              // CRITICAL: If DB has RLS recursion (42P17) or Permission Denied (42501), Admin should still get in.
               if (isTargetAdmin && (dbError.code === '42P17' || dbError.code === '42501')) {
                  const recoveryUser: StoredUser = {
                     id: authData.user.id,
@@ -163,14 +157,9 @@ export const authService = {
                  localStorage.setItem(SESSION_KEY, JSON.stringify(recoveryUser));
                  return { success: true, user: recoveryUser, message: 'СБОЙ БД: АВАРИЙНЫЙ ВХОД АДМИНИСТРАТОРА' };
               }
-
-              // Normal users fail
               return { success: false, message: `ОШИБКА БАЗЫ ДАННЫХ: ${dbError.code || 'НЕИЗВЕСТНАЯ ОШИБКА'}` };
           }
 
-          // Handle Approval Check
-          // If field is missing (old schema), default to true for safety or false for strictness. 
-          // Assuming strict: default to false unless it's the specific admin email.
           const isApproved = profile?.is_approved ?? (isTargetAdmin ? true : false);
 
           if (!isApproved) {
@@ -178,7 +167,6 @@ export const authService = {
               return { success: false, message: 'ДОСТУП ОГРАНИЧЕН: ОЖИДАЕТСЯ ПОДТВЕРЖДЕНИЕ АДМИНИСТРАТОРА' };
           }
 
-          // Force Override if Super Admin Email
           const effectiveClearance = isTargetAdmin ? 6 : (profile?.clearance ?? 1);
 
           const user: StoredUser = {
@@ -190,10 +178,10 @@ export const authService = {
             registeredAt: profile?.registered_at || new Date().toISOString(),
             isSuperAdmin: isTargetAdmin,
             is_approved: true,
-            // Defaults
-            title: isTargetAdmin ? 'Администратор' : 'Полевой Агент', 
-            department: isTargetAdmin ? 'Командование О5' : 'Общие обязанности',
-            site: isTargetAdmin ? 'Зона-01' : 'Зона-19'
+            title: profile?.title || (isTargetAdmin ? 'Администратор' : 'Полевой Агент'), 
+            department: profile?.department || (isTargetAdmin ? 'Командование О5' : 'Общие обязанности'),
+            site: profile?.site || (isTargetAdmin ? 'Зона-01' : 'Зона-19'),
+            avatar_url: profile?.avatar_url
           };
           
           if (isTargetAdmin) {
@@ -215,12 +203,9 @@ export const authService = {
     const localUser = localUsers.find(u => (u.email || u.id).toLowerCase() === email.toLowerCase() && u.password === password);
 
     if (localUser) {
-      // Check approval locally
       if (!localUser.is_approved && !localUser.isSuperAdmin) {
           return { success: false, message: 'ДОСТУП ОГРАНИЧЕН: ОЖИДАЕТСЯ ПОДТВЕРЖДЕНИЕ АДМИНИСТРАТОРА' };
       }
-
-      // Refresh admin status on login just in case
       if (localUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
           localUser.isSuperAdmin = true;
           localUser.clearance = 6;
@@ -231,6 +216,57 @@ export const authService = {
     }
 
     return { success: false, message: 'ДОСТУП ЗАПРЕЩЕН: ПОЛЬЗОВАТЕЛЬ НЕ НАЙДЕН' };
+  },
+
+  // Update Avatar via Storage
+  uploadAvatar: async (userId: string, file: File): Promise<{ success: boolean; url?: string; message: string }> => {
+     if (!isSupabaseConfigured()) {
+       return { success: false, message: 'ХРАНИЛИЩЕ НЕДОСТУПНО (OFFLINE)' };
+     }
+
+     try {
+       const fileExt = file.name.split('.').pop();
+       const fileName = `${userId}-${Date.now()}.${fileExt}`;
+       const filePath = `${fileName}`;
+
+       // 1. Upload
+       const { error: uploadError } = await supabase!.storage
+         .from('avatars')
+         .upload(filePath, file);
+
+       if (uploadError) {
+         console.error('Storage Upload Error:', uploadError);
+         return { success: false, message: `ОШИБКА ЗАГРУЗКИ: ${uploadError.message}` };
+       }
+
+       // 2. Get URL
+       const { data } = supabase!.storage.from('avatars').getPublicUrl(filePath);
+       const publicUrl = data.publicUrl;
+
+       // 3. Update DB
+       const { error: dbError } = await supabase!
+         .from('personnel')
+         .update({ avatar_url: publicUrl })
+         .eq('id', userId);
+
+       if (dbError) {
+         console.error('DB Update Error:', dbError);
+         return { success: false, message: `ОШИБКА БД: ${dbError.message}` };
+       }
+
+       // 4. Update Session
+       const sessionData = localStorage.getItem(SESSION_KEY);
+       if (sessionData) {
+          const session = JSON.parse(sessionData);
+          session.avatar_url = publicUrl;
+          localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+       }
+
+       return { success: true, url: publicUrl, message: 'БИОМЕТРИЯ ОБНОВЛЕНА' };
+
+     } catch (e: any) {
+        return { success: false, message: `СИСТЕМНЫЙ СБОЙ: ${e.message}` };
+     }
   },
 
   logout: () => {
