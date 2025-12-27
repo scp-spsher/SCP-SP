@@ -30,6 +30,7 @@ interface LayoutProps {
   realEmail?: string;
   isSuperAdmin?: boolean;
   user?: any; // To check ID
+  unreadMessages?: number;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -40,7 +41,8 @@ const Layout: React.FC<LayoutProps> = ({
   simulatedClearance,
   setSimulatedClearance,
   isSuperAdmin,
-  user
+  user,
+  unreadMessages = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -57,7 +59,7 @@ const Layout: React.FC<LayoutProps> = ({
   const navItems = [
     { id: 'dashboard', label: isO5View ? 'ГЛАЗ БОГА' : 'ОБЗОР', icon: isO5View ? Eye : Activity, minClearance: 0 },
     { id: 'profile', label: 'ID КАРТА', icon: UserCircle, minClearance: 0 },
-    { id: 'messages', label: 'СООБЩЕНИЯ', icon: Mail, minClearance: 0 },
+    { id: 'messages', label: 'СООБЩЕНИЯ', icon: Mail, minClearance: 0, showBadge: true },
     { id: 'database', label: 'АРХИВ', icon: Database, minClearance: 2 },
     { id: 'reports', label: 'ОТЧЕТЫ', icon: FileText, minClearance: 1 },
     { id: 'comms', label: 'СПЕЦСВЯЗЬ', icon: MessageSquare, minClearance: 3 },
@@ -110,12 +112,13 @@ const Layout: React.FC<LayoutProps> = ({
           <ul className="space-y-1">
             {navItems.map((item) => {
               const hasAccess = simulatedClearance >= item.minClearance;
+              const hasUnread = item.showBadge && unreadMessages > 0;
               return (
                 <li key={item.id}>
                   {hasAccess ? (
                      <button
                      onClick={() => onNavigate(item.id)}
-                     className={`w-full flex items-center px-6 py-3 text-sm transition-colors duration-200 border-l-4 ${
+                     className={`w-full flex items-center px-6 py-3 text-sm transition-colors duration-200 border-l-4 relative ${
                        currentPage === item.id 
                          ? activeBg
                          : 'border-transparent text-gray-400 hover:bg-gray-900 hover:text-white'
@@ -123,6 +126,9 @@ const Layout: React.FC<LayoutProps> = ({
                    >
                      <item.icon size={18} className="mr-3" />
                      {item.label}
+                     {hasUnread && (
+                        <span className="absolute right-4 w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)]"></span>
+                     )}
                    </button>
                   ) : (
                     <div className="w-full flex items-center px-6 py-3 text-sm text-gray-700 cursor-not-allowed select-none">
@@ -162,7 +168,12 @@ const Layout: React.FC<LayoutProps> = ({
             {isO5View ? <Eye size={24} className="mr-2 text-yellow-500" /> : <div className="w-6 h-6 mr-2 text-scp-text"><SCPLogo className="w-full h-full" /></div>}
             <span className={`font-bold tracking-widest ${isO5View ? 'text-yellow-500' : ''}`}>SCPNET</span>
           </div>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}><Menu size={24} /></button>
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="relative">
+            <Menu size={24} />
+            {unreadMessages > 0 && currentPage !== 'messages' && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-black"></span>
+            )}
+          </button>
         </header>
 
         {isMobileMenuOpen && (
@@ -170,15 +181,19 @@ const Layout: React.FC<LayoutProps> = ({
              <ul className="space-y-2">
             {navItems.map((item) => {
                const hasAccess = simulatedClearance >= item.minClearance;
+               const hasUnread = item.showBadge && unreadMessages > 0;
                return (
                 <li key={item.id}>
                   {hasAccess ? (
                     <button
                       onClick={() => { onNavigate(item.id); setIsMobileMenuOpen(false); }}
-                      className={`w-full flex items-center px-4 py-4 text-sm border-l-2 ${currentPage === item.id ? activeBg : 'border-transparent text-gray-400 hover:bg-gray-900'}`}
+                      className={`w-full flex items-center px-4 py-4 text-sm border-l-2 relative ${currentPage === item.id ? activeBg : 'border-transparent text-gray-400 hover:bg-gray-900'}`}
                     >
                       <item.icon size={18} className="mr-3" />
                       {item.label}
+                      {hasUnread && (
+                        <span className="ml-2 px-1.5 bg-red-600 text-[10px] text-white rounded-full">NEW</span>
+                      )}
                     </button>
                   ) : null}
                 </li>
