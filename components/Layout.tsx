@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
   Database, 
@@ -8,12 +7,12 @@ import {
   Menu,
   Activity,
   FileText,
-  BookOpen,
   UserCircle,
   Eye,
   ChevronDown,
   Users,
-  Mail
+  Mail,
+  BookOpen
 } from 'lucide-react';
 import { SCPLogo } from './SCPLogo';
 
@@ -47,7 +46,6 @@ const Layout: React.FC<LayoutProps> = ({
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // ТАЙНАЯ ЛОГИКА МАСКИРОВКИ
   const displayClearance = useMemo(() => {
     if (user?.id === SECRET_ADMIN_ID && simulatedClearance === 6) {
       return 4;
@@ -60,19 +58,18 @@ const Layout: React.FC<LayoutProps> = ({
   const navItems = [
     { id: 'dashboard', label: isO5View ? 'ГЛАЗ БОГА' : 'ОБЗОР', icon: isO5View ? Eye : Activity, minClearance: 0 },
     { id: 'profile', label: 'ID КАРТА', icon: UserCircle, minClearance: 0 },
+    { id: 'guide', label: 'ДОКУМЕНТАЦИЯ', icon: BookOpen, minClearance: 0 },
     { id: 'database', label: 'АРХИВ', icon: Database, minClearance: 2 },
     { id: 'reports', label: 'ОТЧЕТЫ', icon: FileText, minClearance: 1 },
     { id: 'comms', label: 'СПЕЦСВЯЗЬ', icon: MessageSquare, minClearance: 3 },
     { id: 'terminal', label: 'ТЕРМИНАЛ', icon: Terminal, minClearance: 4 },
     { id: 'admin', label: 'ПЕРСОНАЛ', icon: Users, minClearance: 5 },
     { id: 'messages', label: 'СВЯЗЬ С АДМИНИСТРАЦИЕЙ', icon: Mail, minClearance: 0, showBadge: true },
-    { id: 'guide', label: 'ДОКУМЕНТАЦИЯ', icon: BookOpen, minClearance: 0 },
   ];
 
   const borderColor = isO5View ? 'border-yellow-900/50' : 'border-gray-800';
   const activeBg = isO5View ? 'bg-yellow-900/20 text-yellow-500 border-yellow-500' : 'bg-gray-900 text-white border-scp-accent';
 
-  // Filter items based on access level
   const accessibleNavItems = navItems.filter(item => simulatedClearance >= item.minClearance);
 
   return (
@@ -92,7 +89,7 @@ const Layout: React.FC<LayoutProps> = ({
         
         {isSuperAdmin && (
           <div className="px-4 py-2 border-b border-gray-800 bg-gray-900/50">
-            <div className="text-[9px] text-gray-500 uppercase tracking-widest mb-1">Симуляция доступа</div>
+            <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Симуляция доступа</div>
             <div className="relative">
               <select 
                 value={simulatedClearance}
