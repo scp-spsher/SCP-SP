@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { ShieldAlert, Check, X, RefreshCw, UserCheck, AlertOctagon, FileText, Save, ArrowLeft, Trash2, Briefcase, MapPin, Hash, User, Database, Copy, Terminal } from 'lucide-react';
@@ -9,12 +10,6 @@ import { SCPLogo } from './SCPLogo';
 const STORAGE_KEY = 'scp_net_users';
 const SECRET_ADMIN_ID = '36046d5d-dde4-4cf6-a2de-794334b7af5c';
 
-interface AdminPanelProps {
-  currentUser: StoredUser | null;
-  onUserUpdate?: (user: StoredUser) => void;
-  onViewProfile?: (userId: string) => void;
-}
-
 interface AdminUser {
   id: string;
   name: string;
@@ -25,6 +20,13 @@ interface AdminUser {
   department?: string;
   site?: string;
   avatar_url?: string;
+}
+
+// Added missing AdminPanelProps interface to fix compilation error
+interface AdminPanelProps {
+  currentUser: StoredUser;
+  onUserUpdate: (user: StoredUser) => void;
+  onViewProfile: (userId: string) => void;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onViewProfile }) => {
@@ -49,14 +51,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                 .order('registered_at', { ascending: false });
 
             if (error) {
+                console.error("Supabase fetch error:", error);
                 handleLocalFetch();
                 setStatusMsg('РЕЖИМ ОГРАНИЧЕННОЙ ФУНКЦИОНАЛЬНОСТИ');
             } else {
-                setUsers(data || []);
+                const fetchedUsers = data || [];
+                setUsers(fetchedUsers);
                 setIsLocalMode(false);
                 setStatusMsg('МЕЙНФРЕЙМ: ONLINE');
+                
+                // СИНХРОНИЗАЦИЯ: Обновляем локальное хранилище, чтобы оно в точности соответствовало БД
+                // Это удалит из локального кэша всех, кто был удален в БД напрямую
+                const mappedForLocal: StoredUser[] = fetchedUsers.map(u => ({
+                    id: u.id,
+                    email: u.id, // В данной системе ID часто совпадает с email или является UUID
+                    name: u.name,
+                    password: '***',
+                    clearance: u.clearance,
+                    registeredAt: u.registered_at,
+                    is_approved: u.is_approved,
+                    title: u.title,
+                    department: u.department,
+                    site: u.site,
+                    avatar_url: u.avatar_url
+                }));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedForLocal));
             }
         } catch (e) {
+            console.error("Fetch exception:", e);
             handleLocalFetch();
         }
     } else {
@@ -77,7 +99,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                   name: u.name,
                   clearance: u.clearance,
                   is_approved: u.is_approved || false,
-                  registered_at: u.registeredAt,
+                  // Fixed property access: StoredUser uses registeredAt instead of registered_at
+                  registered_at: u.registeredAt || new Date().toISOString(),
                   title: u.title,
                   department: u.department,
                   site: u.site,
@@ -126,10 +149,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
               parsed[idx] = { 
                   ...parsed[idx], 
                   ...updatedUser as any, 
-                  registeredAt: updatedUser.registered_at || parsed[idx].registeredAt 
+                  registeredAt: updatedUser.registered_at || parsed[idx].registeredAt || (parsed[idx] as any).registered_at
               };
               localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-              handleLocalFetch();
               return true;
           }
       }
@@ -152,10 +174,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
         } else {
             setStatusMsg('ПОЛЬЗОВАТЕЛЬ ОДОБРЕН');
             setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_approved: true } : u));
+            // Синхронизируем локально
+            updateLocalUser({ is_approved: true }, userId);
         }
     } else {
         updateLocalUser({ is_approved: true }, userId);
         setStatusMsg('ОДОБРЕНО (ЛОКАЛЬНО)');
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_approved: true } : u));
     }
   };
 
@@ -187,18 +212,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
             } else {
                 setStatusMsg('ДОСЬЕ ОБНОВЛЕНО');
                 setUsers(prev => prev.map(u => u.id === editForm.id ? { ...u, ...updates } : u));
+                updateLocalUser(updates, editForm.id);
             }
         } else {
             updateLocalUser(updates, editForm.id);
             setStatusMsg('ДОСЬЕ ОБНОВЛЕНО (ЛОКАЛЬНО)');
+            setUsers(prev => prev.map(u => u.id === editForm.id ? { ...u, ...updates } : u));
         }
 
-        // КРИТИЧЕСКОЕ ОБНОВЛЕНИЕ: Если редактируем себя - обновляем активную сессию
         if (editForm.id === currentUser.id) {
             const updatedCurrentUser: StoredUser = {
                 ...currentUser,
                 name: updates.name,
-                // Cast clearance to SecurityClearance to ensure type compatibility with StoredUser
                 clearance: updates.clearance as SecurityClearance,
                 title: updates.title,
                 department: updates.department,
@@ -206,14 +231,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                 is_approved: updates.is_approved,
                 avatar_url: updates.avatar_url || currentUser.avatar_url
             };
-            
-            // Обновляем localStorage сессии
             localStorage.setItem(SESSION_KEY, JSON.stringify(updatedCurrentUser));
-            
-            // Уведомляем App через callback
-            if (onUserUpdate) {
-                onUserUpdate(updatedCurrentUser);
-            }
+            if (onUserUpdate) onUserUpdate(updatedCurrentUser);
         }
 
         setSelectedUser({ ...editForm });
@@ -225,47 +244,48 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
   };
 
   const handleTerminateUser = async () => {
-    if (!editForm || !window.confirm('ТЕРМИНИРОВАТЬ СОТРУДНИКА?')) return;
+    if (!editForm) return;
+    if (!window.confirm(`ТЕРМИНИРОВАТЬ СОТРУДНИКА ${editForm.name.toUpperCase()}?\nЭТО ДЕЙСТВИЕ НЕОБРАТИМО.`)) return;
     
     setIsSaving(true);
     setStatusMsg('ТЕРМИНАЦИЯ...');
 
-    if (!isLocalMode && isSupabaseConfigured()) {
-        const { error } = await supabase!
-        .from('personnel')
-        .delete()
-        .eq('id', editForm.id);
-
-        if (error) {
-            setStatusMsg('ОШИБКА УДАЛЕНИЯ');
-        } else {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) {
-                const parsed: StoredUser[] = JSON.parse(raw);
-                const filtered = parsed.filter(u => u.id !== editForm.id);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    try {
+        // 1. Пытаемся удалить в Supabase
+        if (!isLocalMode && isSupabaseConfigured()) {
+            const { error } = await supabase!
+                .from('personnel')
+                .delete()
+                .eq('id', editForm.id);
+            
+            if (error) {
+                console.warn("Could not delete from DB, will try local only", error);
             }
-            setStatusMsg('СОТРУДНИК УСТРАНЕН');
-            setUsers(prev => prev.filter(u => u.id !== editForm.id));
-            handleCloseDossier();
         }
-    } else {
+
+        // 2. ВСЕГДА удаляем из локального хранилища (даже если БД выдала ошибку)
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const parsed: StoredUser[] = JSON.parse(raw);
             const filtered = parsed.filter(u => u.id !== editForm.id);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-            handleLocalFetch();
         }
-        setStatusMsg('УСТРАНЕН (ЛОКАЛЬНО)');
+
+        // 3. Обновляем состояние UI
+        setUsers(prev => prev.filter(u => u.id !== editForm.id));
+        setStatusMsg('СОТРУДНИК УСТРАНЕН');
         handleCloseDossier();
+        
+    } catch (e: any) {
+        console.error("Termination error:", e);
+        setStatusMsg('ОШИБКА ПРИ ТЕРМИНАЦИИ');
+    } finally {
+        setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   if (selectedUser && editForm) {
     const isSecretAdmin = editForm.id === SECRET_ADMIN_ID && editForm.clearance === 6;
-    const displayClearance = isSecretAdmin ? 4 : editForm.clearance;
 
     return (
       <div className="flex flex-col h-full gap-6 animate-in slide-in-from-right-4 duration-300">
@@ -326,6 +346,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                             <option value={6}>L-4 (MASKED)</option>
                             ) : (
                             <>
+                                <option value={0}>L-0 (СТАЖЕР)</option>
                                 <option value={1}>L-1</option>
                                 <option value={2}>L-2</option>
                                 <option value={3}>L-3</option>
