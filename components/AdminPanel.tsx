@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { ShieldAlert, Check, X, RefreshCw, UserCheck, AlertOctagon, FileText, Save, ArrowLeft, Trash2, Briefcase, MapPin, Hash, User, Database, Copy, Terminal } from 'lucide-react';
