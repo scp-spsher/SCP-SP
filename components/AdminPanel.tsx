@@ -1,7 +1,10 @@
+
 import React, { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { ShieldAlert, Check, X, RefreshCw, UserCheck, AlertOctagon, FileText, Save, ArrowLeft, Trash2, Briefcase, MapPin, Hash, User, Database, Copy, Terminal } from 'lucide-react';
-import { StoredUser } from '../services/authService';
+import { StoredUser, SESSION_KEY } from '../services/authService';
+// Import SecurityClearance to ensure type safety for user access levels
+import { SecurityClearance } from '../types';
 import { SCPLogo } from './SCPLogo';
 
 const STORAGE_KEY = 'scp_net_users';
@@ -9,12 +12,13 @@ const SECRET_ADMIN_ID = '36046d5d-dde4-4cf6-a2de-794334b7af5c';
 
 interface AdminPanelProps {
   currentUser: StoredUser | null;
+  onUserUpdate?: (user: StoredUser) => void;
 }
 
 interface AdminUser {
   id: string;
   name: string;
-  clearance: number;
+  clearance: SecurityClearance;
   is_approved: boolean;
   registered_at: string;
   title?: string;
@@ -23,7 +27,7 @@ interface AdminUser {
   avatar_url?: string;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate }) => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
@@ -156,7 +160,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
   };
 
   const handleSaveProfile = async () => {
-    if (!editForm) return;
+    if (!editForm || !currentUser) return;
     setIsSaving(true);
     setStatusMsg('СОХРАНЕНИЕ...');
 
@@ -166,30 +170,58 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
       title: editForm.title,
       department: editForm.department,
       site: editForm.site,
-      is_approved: editForm.is_approved
+      is_approved: editForm.is_approved,
+      avatar_url: editForm.avatar_url
     };
 
-    if (!isLocalMode && isSupabaseConfigured()) {
-        const { error } = await supabase!
-        .from('personnel')
-        .update(updates)
-        .eq('id', editForm.id);
+    try {
+        if (!isLocalMode && isSupabaseConfigured()) {
+            const { error } = await supabase!
+            .from('personnel')
+            .update(updates)
+            .eq('id', editForm.id);
 
-        if (error) {
-             updateLocalUser(updates, editForm.id);
-             setStatusMsg('СОХРАНЕНО ЛОКАЛЬНО');
-             setSelectedUser({ ...editForm });
+            if (error) {
+                 updateLocalUser(updates, editForm.id);
+                 setStatusMsg('СОХРАНЕНО ЛОКАЛЬНО');
+            } else {
+                setStatusMsg('ДОСЬЕ ОБНОВЛЕНО');
+                setUsers(prev => prev.map(u => u.id === editForm.id ? { ...u, ...updates } : u));
+            }
         } else {
-            setStatusMsg('ДОСЬЕ ОБНОВЛЕНО');
-            setUsers(prev => prev.map(u => u.id === editForm.id ? { ...u, ...updates } : u));
-            setSelectedUser({ ...editForm });
+            updateLocalUser(updates, editForm.id);
+            setStatusMsg('ДОСЬЕ ОБНОВЛЕНО (ЛОКАЛЬНО)');
         }
-    } else {
-        updateLocalUser(updates, editForm.id);
-        setStatusMsg('ДОСЬЕ ОБНОВЛЕНО (ЛОКАЛЬНО)');
+
+        // КРИТИЧЕСКОЕ ОБНОВЛЕНИЕ: Если редактируем себя - обновляем активную сессию
+        if (editForm.id === currentUser.id) {
+            const updatedCurrentUser: StoredUser = {
+                ...currentUser,
+                name: updates.name,
+                // Cast clearance to SecurityClearance to ensure type compatibility with StoredUser
+                clearance: updates.clearance as SecurityClearance,
+                title: updates.title,
+                department: updates.department,
+                site: updates.site,
+                is_approved: updates.is_approved,
+                avatar_url: updates.avatar_url || currentUser.avatar_url
+            };
+            
+            // Обновляем localStorage сессии
+            localStorage.setItem(SESSION_KEY, JSON.stringify(updatedCurrentUser));
+            
+            // Уведомляем App через callback
+            if (onUserUpdate) {
+                onUserUpdate(updatedCurrentUser);
+            }
+        }
+
         setSelectedUser({ ...editForm });
+    } catch (e) {
+        setStatusMsg('ОШИБКА СОХРАНЕНИЯ');
+    } finally {
+        setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   const handleTerminateUser = async () => {
