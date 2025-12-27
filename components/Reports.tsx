@@ -59,16 +59,11 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
         const errorText = e.message || String(e);
         console.warn("Sync Issue:", errorText);
         
-        // Handle "Failed to fetch" (Network Error)
         if (errorText.includes('fetch') || errorText.includes('NetworkError')) {
           setUsingLocalFallback(true);
           loadLocalReports();
           setStatusMessage({ text: 'КАНАЛ СВЯЗИ ПРЕРВАН: ИСПОЛЬЗУЕТСЯ ЛОКАЛЬНЫЙ БУФЕР', type: 'error' });
-        } else if (errorText.includes('42P01')) {
-          setStatusMessage({ text: 'ОШИБКА БД: ТАБЛИЦА REPORTS НЕ НАЙДЕНА', type: 'error' });
-          loadLocalReports();
         } else {
-          setStatusMessage({ text: `ОШИБКА: ${errorText.toUpperCase()}`, type: 'error' });
           loadLocalReports();
         }
       } finally {
@@ -108,7 +103,6 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
         if (error) throw error;
         return true;
       } catch (e) {
-        console.warn("Failed to sync new report, kept in local buffer");
         return false;
       }
     }
@@ -138,43 +132,76 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
     try {
       const savedToDb = await saveToBoth(newReport);
       setReports(prev => [newReport, ...prev]);
-      
       setStatusMessage({ 
-        text: savedToDb ? 'РАПОРТ ПЕРЕДАН В ЦЕНТРАЛЬНЫЙ АРХИВ' : 'РАПОРТ СОХРАНЕН ЛОКАЛЬНО (СЕЙВ-ФАЙЛ)', 
+        text: savedToDb ? 'РАПОРТ ПЕРЕДАН В ЦЕНТРАЛЬНЫЙ АРХИВ' : 'РАПОРТ СОХРАНЕН ЛОКАЛЬНО', 
         type: 'success' 
       });
-      
       setTimeout(() => {
         setFormData({ title: '', type: 'INCIDENT', severity: 'LOW', content: '', target_id: '' });
         setView('list');
         setStatusMessage(null);
       }, 1500);
-
     } catch (err: any) {
-      setStatusMessage({ text: `СБОЙ ЗАПИСИ: ${err.message || 'ОШИБКА'}`, type: 'error' });
+      setStatusMessage({ text: `СБОЙ ЗАПИСИ: ${err.message}`, type: 'error' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Удалить отчет из архива?")) return;
+    if (!window.confirm("ВНИМАНИЕ: УДАЛЕНИЕ ЗАПИСИ ИЗ ЦЕНТРАЛЬНОГО РЕЕСТРА. ПОДТВЕРДИТЬ?")) return;
+    
+    setStatusMessage({ text: 'УДАЛЕНИЕ...', type: 'success' });
+
     try {
+      let remoteDeleted = false;
+      
+      // 1. Пытаемся удалить из Supabase
       if (isSupabaseConfigured() && !usingLocalFallback) {
-        await supabase!.from('reports').delete().eq('id', id);
+        const { error } = await supabase!.from('reports').delete().eq('id', id);
+        
+        if (error) {
+          if (error.code === '42501') {
+            throw new Error("ОТКАЗАНО В ДОСТУПЕ: У ВАС НЕТ ПРАВ НА УДАЛЕНИЕ ЭТОГО РАПОРТА");
+          }
+          throw error;
+        }
+        remoteDeleted = true;
       }
+
+      // 2. Гарантированно удаляем из локального стейта и хранилища
       setReports(prev => prev.filter(r => r.id !== id));
-      const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(local.filter((r: any) => r.id !== id)));
+      
+      const localRaw = localStorage.getItem(STORAGE_KEY);
+      if (localRaw) {
+        const local = JSON.parse(localRaw);
+        const filtered = local.filter((r: any) => r.id !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      }
+
+      setStatusMessage({ 
+        text: remoteDeleted ? 'ЗАПИСЬ УСПЕШНО УДАЛЕНА ИЗ ВСЕХ РЕЕСТРОВ' : 'ЗАПИСЬ УДАЛЕНА ЛОКАЛЬНО', 
+        type: 'success' 
+      });
+
+      setSelectedReport(null);
       setView('list');
+      
+      setTimeout(() => setStatusMessage(null), 3000);
+
     } catch (e: any) {
-      alert("Ошибка удаления: " + (e.message || "Нет прав"));
+      const errorMsg = e.message || String(e);
+      console.error("Delete Error:", errorMsg);
+      setStatusMessage({ 
+        text: `ОШИБКА УДАЛЕНИЯ: ${errorMsg.toUpperCase()}`, 
+        type: 'error' 
+      });
     }
   };
 
   const visibleReports = reports.filter(r => {
     if (!user) return false;
-    if (user.clearance < r.author_clearance) return false;
+    if (user.clearance < r.author_clearance && user.id !== r.author_id) return false;
     const query = searchTerm.toLowerCase();
     return r.title.toLowerCase().includes(query) || 
            r.id.toLowerCase().includes(query) ||
@@ -419,7 +446,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
                   onClick={() => handleDelete(selectedReport.id)}
                   className="flex items-center gap-2 p-2 text-[10px] text-red-500 hover:bg-red-900/20 transition-colors uppercase font-bold border border-red-900/30"
                 >
-                  <Trash2 size={12} /> Удалить
+                  <Trash2 size={12} /> Удалить рапорт
                 </button>
               )}
             </div>
