@@ -1,43 +1,81 @@
+
 import { SecurityClearance } from '../types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
-// Exporting constants at the top level clearly for build tools
 export const SESSION_KEY = 'scp_net_current_session';
 const STORAGE_KEY = 'scp_net_users';
-
-// --- CONFIGURATION ---
 export const ADMIN_EMAIL = 'arseniychekrigin@gmail.com';
 
 export interface StoredUser {
-  id: string; // Used for Email in this context (Local) or UUID (Remote)
-  email?: string; // Explicit email field
+  id: string;
+  email?: string;
   name: string;
-  password: string; // Kept for local fallback compatibility
+  password: string;
   clearance: SecurityClearance;
   registeredAt: string;
-  isSuperAdmin?: boolean; // New Flag
-  is_approved?: boolean; // New Approval Flag
-  // New Profile Fields
+  isSuperAdmin?: boolean;
+  is_approved?: boolean;
   title?: string;
   department?: string;
   site?: string;
-  avatar_url?: string; // Changed from 'image' to 'avatar_url' for Storage support
+  avatar_url?: string;
 }
 
 export const authService = {
-  // Check if a user is currently logged in (Session Persistence)
   getSession: (): StoredUser | null => {
     try {
       const session = localStorage.getItem(SESSION_KEY);
-      return session ? JSON.parse(session) : null;
+      if (!session) return null;
+      const user = JSON.parse(session);
+      // Sanitize session data
+      return {
+        ...user,
+        clearance: Number(user.clearance) as SecurityClearance
+      };
     } catch (e) {
       return null;
     }
   },
 
-  // Fetch any user by ID
+  tryRecoverSession: async (): Promise<StoredUser | null> => {
+    if (!isSupabaseConfigured()) return null;
+    try {
+      const { data: { session } } = await supabase!.auth.getSession();
+      if (!session || !session.user) return null;
+
+      const { data: profile, error } = await supabase!
+        .from('personnel')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (!profile || error) return null;
+
+      const isTargetAdmin = (session.user.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+      const user: StoredUser = {
+        id: profile.id,
+        email: session.user.email || '',
+        name: String(profile.name || 'Агент'),
+        password: '***',
+        clearance: (isTargetAdmin ? 6 : Number(profile.clearance || 0)) as SecurityClearance,
+        registeredAt: profile.registered_at || new Date().toISOString(),
+        isSuperAdmin: isTargetAdmin,
+        is_approved: !!profile.is_approved,
+        title: profile.title || '',
+        department: profile.department || '',
+        site: profile.site || '',
+        avatar_url: profile.avatar_url || ''
+      };
+
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      return user;
+    } catch (e) {
+      return null;
+    }
+  },
+
   getUserById: async (id: string): Promise<StoredUser | null> => {
-    // 1. Check DB
     if (isSupabaseConfigured()) {
       try {
         const { data: profile, error } = await supabase!
@@ -46,95 +84,32 @@ export const authService = {
           .eq('id', id)
           .maybeSingle();
         
-        if (profile && !error) {
-           return {
-              id: profile.id,
-              name: profile.name,
-              password: '***',
-              clearance: profile.clearance,
-              registeredAt: profile.registered_at,
-              title: profile.title,
-              department: profile.department,
-              site: profile.site,
-              avatar_url: profile.avatar_url,
-              is_approved: profile.is_approved
-           };
-        }
+        if (!profile || error) return null; 
+
+        return {
+          id: profile.id,
+          name: String(profile.name || 'Сотрудник'),
+          password: '***',
+          clearance: Number(profile.clearance || 0) as SecurityClearance,
+          registeredAt: profile.registered_at,
+          title: profile.title || '',
+          department: profile.department || '',
+          site: profile.site || '',
+          avatar_url: profile.avatar_url || '',
+          is_approved: !!profile.is_approved
+        };
       } catch (e) { console.error(e); }
     }
 
-    // 2. Check Local
     const localData = localStorage.getItem(STORAGE_KEY);
     if (localData) {
        const users: StoredUser[] = JSON.parse(localData);
        const user = users.find(u => u.id === id);
-       if (user) return user;
+       return user ? { ...user, clearance: Number(user.clearance) as SecurityClearance } : null;
     }
-
     return null;
   },
 
-  // Fetch all admins
-  getAdmins: async (): Promise<StoredUser[]> => {
-     if (isSupabaseConfigured()) {
-        const { data } = await supabase!
-          .from('personnel')
-          .select('*')
-          .gte('clearance', 5);
-        if (data) return data.map(d => ({ ...d, registeredAt: d.registered_at, password: '***' }));
-     }
-     const localData = localStorage.getItem(STORAGE_KEY);
-     if (localData) {
-        return JSON.parse(localData).filter((u: StoredUser) => u.clearance >= 5);
-     }
-     return [];
-  },
-
-  // Attempt to recover a lost local session from an active Supabase session
-  tryRecoverSession: async (): Promise<StoredUser | null> => {
-    if (!isSupabaseConfigured()) return null;
-
-    try {
-      const { data: { session } } = await supabase!.auth.getSession();
-      if (!session || !session.user) return null;
-
-      // Found a Supabase session but no local profile session
-      const isTargetAdmin = session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-
-      let { data: profile, error } = await supabase!
-        .from('personnel')
-        .select('*')
-        .eq('id', session.user.id)
-        .maybeSingle();
-
-      if (error || !profile) {
-        return null;
-      }
-
-      const recoveredUser: StoredUser = {
-        id: profile.id,
-        email: session.user.email,
-        name: profile.name || 'Агент',
-        password: '***',
-        clearance: isTargetAdmin ? 6 : (profile.clearance || 0),
-        registeredAt: profile.registered_at || new Date().toISOString(),
-        isSuperAdmin: isTargetAdmin,
-        is_approved: profile.is_approved,
-        title: profile.title,
-        department: profile.department,
-        site: profile.site,
-        avatar_url: profile.avatar_url
-      };
-
-      localStorage.setItem(SESSION_KEY, JSON.stringify(recoveredUser));
-      return recoveredUser;
-    } catch (e) {
-      console.error("Session Recovery Error:", e);
-      return null;
-    }
-  },
-
-  // Refresh session data
   refreshSession: async (): Promise<StoredUser | null> => {
     const currentSession = authService.getSession();
     if (!currentSession) return null;
@@ -144,7 +119,11 @@ export const authService = {
     if (isSupabaseConfigured()) {
       try {
         const { data: { session: sbSession } } = await supabase!.auth.getSession();
-        if (!sbSession) return null;
+        
+        if (!sbSession) {
+            authService.logout();
+            return null;
+        }
 
         let { data: profile, error } = await supabase!
           .from('personnel')
@@ -152,49 +131,50 @@ export const authService = {
           .eq('id', currentSession.id)
           .maybeSingle();
 
-        if (profile) {
-            const updatedUser: StoredUser = {
-                ...currentSession,
-                name: profile.name,
-                clearance: isTargetAdmin ? 6 : profile.clearance,
-                is_approved: profile.is_approved,
-                title: profile.title || currentSession.title,
-                department: profile.department || currentSession.department,
-                site: profile.site || currentSession.site,
-                avatar_url: profile.avatar_url || currentSession.avatar_url,
-                registeredAt: profile.registered_at || currentSession.registeredAt,
-                isSuperAdmin: isTargetAdmin
-            };
-            localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
-            return updatedUser;
+        if (!profile || error) {
+            authService.logout();
+            return null;
         }
+
+        const updatedUser: StoredUser = {
+            ...currentSession,
+            name: String(profile.name || currentSession.name),
+            clearance: (isTargetAdmin ? 6 : Number(profile.clearance || 0)) as SecurityClearance,
+            is_approved: !!profile.is_approved,
+            title: profile.title || currentSession.title,
+            department: profile.department || currentSession.department,
+            site: profile.site || currentSession.site,
+            avatar_url: profile.avatar_url || currentSession.avatar_url,
+            registeredAt: profile.registered_at || currentSession.registeredAt,
+            isSuperAdmin: isTargetAdmin
+        };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
+        return updatedUser;
       } catch (e) { return currentSession; }
     }
 
     const localData = localStorage.getItem(STORAGE_KEY);
     if (localData) {
         const users: StoredUser[] = JSON.parse(localData);
-        const freshData = users.find(u => u.id === currentSession.id || (u.email && u.email === currentSession.email));
-        if (freshData) {
-             const updatedUser: StoredUser = {
-                 ...currentSession,
-                 ...freshData,
-                 clearance: isTargetAdmin ? 6 : freshData.clearance,
-                 isSuperAdmin: isTargetAdmin,
-                 is_approved: true
-             };
-             localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
-             return updatedUser;
+        const freshData = users.find(u => u.id === currentSession.id);
+        if (!freshData) {
+            authService.logout();
+            return null;
         }
+        return { 
+          ...currentSession, 
+          ...freshData, 
+          clearance: Number(freshData.clearance) as SecurityClearance,
+          isSuperAdmin: isTargetAdmin 
+        };
     }
     return currentSession;
   },
 
-  // Register a new user
   register: async (email: string, name: string, password: string, clearance: number): Promise<{ success: boolean; message: string }> => {
     const isTargetAdmin = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-    const finalClearance = isTargetAdmin ? 6 : 0; // Начальный уровень теперь 0
-    const isApproved = true; // Теперь подтверждение не требуется
+    const finalClearance = isTargetAdmin ? 6 : 0; 
+    const isApproved = true; 
 
     if (isSupabaseConfigured()) {
       try {
@@ -237,7 +217,7 @@ export const authService = {
       email: email,
       name,
       password,
-      clearance: finalClearance as SecurityClearance,
+      clearance: Number(finalClearance) as SecurityClearance,
       registeredAt: new Date().toISOString(),
       title: isTargetAdmin ? 'Администратор' : 'Стажер',
       department: isTargetAdmin ? 'Фонд SCP' : 'Общий сектор',
@@ -273,16 +253,16 @@ export const authService = {
           const user: StoredUser = {
             id: profile?.id || authData.user.id,
             email: authData.user.email || email,
-            name: profile?.name || 'Неизвестный агент',
+            name: String(profile?.name || 'Неизвестный агент'),
             password: '***',
-            clearance: isTargetAdmin ? 6 : (profile?.clearance ?? 0),
+            clearance: (isTargetAdmin ? 6 : Number(profile?.clearance ?? 0)) as SecurityClearance,
             registeredAt: profile?.registered_at || new Date().toISOString(),
             isSuperAdmin: isTargetAdmin,
             is_approved: true,
             title: profile?.title || (isTargetAdmin ? 'Администратор' : 'Сотрудник L-0'), 
             department: profile?.department || (isTargetAdmin ? 'Командование О5' : 'Общие обязанности'),
             site: profile?.site || (isTargetAdmin ? 'Зона-01' : 'Зона-19'),
-            avatar_url: profile?.avatar_url
+            avatar_url: profile?.avatar_url || ''
           };
           
           localStorage.setItem(SESSION_KEY, JSON.stringify(user));
@@ -296,8 +276,9 @@ export const authService = {
     const localUser = localUsers.find(u => (u.email || u.id).toLowerCase() === email.toLowerCase() && u.password === password);
 
     if (localUser) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(localUser));
-      return { success: true, user: localUser, message: 'ЛИЧНОСТЬ ПОДТВЕРЖДЕНА [LOCAL]' };
+      const sanitized = { ...localUser, clearance: Number(localUser.clearance) as SecurityClearance };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sanitized));
+      return { success: true, user: sanitized, message: 'ЛИЧНОСТЬ ПОДТВЕРЖДЕНА [LOCAL]' };
     }
     return { success: false, message: 'ДОСТУП ЗАПРЕЩЕН: ПОЛЬЗОВАТЕЛЬ НЕ НАЙДЕН' };
   },
