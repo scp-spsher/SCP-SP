@@ -35,6 +35,45 @@ export const authService = {
     }
   },
 
+  // Fetch any user by ID
+  getUserById: async (id: string): Promise<StoredUser | null> => {
+    // 1. Check DB
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: profile, error } = await supabase!
+          .from('personnel')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        
+        if (profile && !error) {
+           return {
+              id: profile.id,
+              name: profile.name,
+              password: '***',
+              clearance: profile.clearance,
+              registeredAt: profile.registered_at,
+              title: profile.title,
+              department: profile.department,
+              site: profile.site,
+              avatar_url: profile.avatar_url,
+              is_approved: profile.is_approved
+           };
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    // 2. Check Local
+    const localData = localStorage.getItem(STORAGE_KEY);
+    if (localData) {
+       const users: StoredUser[] = JSON.parse(localData);
+       const user = users.find(u => u.id === id);
+       if (user) return user;
+    }
+
+    return null;
+  },
+
   // Attempt to recover a lost local session from an active Supabase session
   tryRecoverSession: async (): Promise<StoredUser | null> => {
     if (!isSupabaseConfigured()) return null;
