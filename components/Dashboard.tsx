@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Lock, Radio, Activity, Users, Globe, Skull } from 'lucide-react';
-import { Recharts, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { AlertTriangle, Lock, Radio, Activity, Users, Globe, Skull, WifiOff } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 
 interface DashboardProps {
   currentClearance: number;
 }
 
-// Mock Data
 const breachData = [
   { name: 'Пн', breaches: 0 },
   { name: 'Вт', breaches: 1 },
@@ -32,15 +31,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
   const [dbStatus, setDbStatus] = useState<string>('OFFLINE');
   const [dbStatusColor, setDbStatusColor] = useState<'green' | 'yellow' | 'red'>('yellow');
   
-  // View Logic based on simulated clearance
   const isHighLevelView = currentClearance >= 5;
 
   useEffect(() => {
     if (isSupabaseConfigured()) {
-      setDbStatus('ONLINE');
-      setDbStatusColor('green');
-      
-      // Fetch real count from DB
       const fetchCount = async () => {
         try {
           const { count, error } = await supabase!
@@ -48,29 +42,31 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
             .select('*', { count: 'exact', head: true });
           
           if (error) {
-             console.error("Dashboard DB Error:", JSON.stringify(error, null, 2));
              if (error.code === '42P01') {
                setDbStatus('НЕТ ТАБЛИЦЫ');
                setDbStatusColor('red');
-             } else if (error.code === '42P17') {
-                setDbStatus('ОШИБКА RLS');
-                setDbStatusColor('red');
-                setPersonnelCount('ERR');
              } else if (error.code === '42501') {
                 setDbStatus('НЕТ ДОСТУПА');
                 setDbStatusColor('red');
                 setPersonnelCount('N/A');
              } else {
-               setDbStatus('ОШИБКА');
+               setDbStatus('ОШИБКА БД');
                setDbStatusColor('red');
              }
-          } else if (count !== null) {
-            setPersonnelCount(count > 0 ? count : 4);
+          } else {
+            setDbStatus('ONLINE');
+            setDbStatusColor('green');
+            if (count !== null) setPersonnelCount(count > 0 ? count : 4);
           }
-        } catch (e) {
-          console.error("Dashboard Fetch Error:", e);
-          setDbStatus('СБОЙ');
-          setDbStatusColor('red');
+        } catch (e: any) {
+          const err = String(e);
+          if (err.includes('fetch')) {
+            setDbStatus('АВТОНОМНО');
+            setDbStatusColor('yellow');
+          } else {
+            setDbStatus('СБОЙ СЕТИ');
+            setDbStatusColor('red');
+          }
         }
       };
       fetchCount();
@@ -94,62 +90,41 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
           {isHighLevelView ? 'ГЛАЗ БОГА :: ТОЛЬКО ДЛЯ O5' : 'СТАТУС ЗОНЫ-19'}
         </h2>
         <div className={`flex items-center gap-2 px-3 py-1 rounded border ${getStatusClasses()}`}>
-           <div className={`w-2 h-2 rounded-full animate-pulse ${dbStatusColor === 'green' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-           <span className="text-xs font-bold tracking-wider">БАЗА ДАННЫХ {dbStatus}</span>
+           {dbStatus === 'АВТОНОМНО' ? <WifiOff size={14} /> : <div className={`w-2 h-2 rounded-full animate-pulse ${dbStatusColor === 'green' ? 'bg-green-500' : 'bg-red-500'}`}></div>}
+           <span className="text-xs font-bold tracking-wider">КАНАЛ: {dbStatus}</span>
         </div>
       </div>
 
-      {/* Top Alerts Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-scp-panel border border-gray-800 p-4 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            {isHighLevelView ? <Globe size={64} className="text-yellow-500" /> : <AlertTriangle size={64} className="text-scp-accent" />}
+            <AlertTriangle size={64} className={isHighLevelView ? "text-yellow-500" : "text-scp-accent"} />
           </div>
-          <h3 className="text-gray-500 text-xs font-bold tracking-widest mb-1">
-             {isHighLevelView ? 'ГЛОБАЛЬНАЯ УГРОЗА' : 'СТАТУС DEFCON'}
-          </h3>
-          <div className={`text-3xl font-bold ${isHighLevelView ? 'text-red-500' : 'text-scp-text'}`}>
-            {isHighLevelView ? 'КРИТИЧЕСКИЙ' : 'УРОВЕНЬ 4'}
-          </div>
-          <div className="text-xs text-gray-400 mt-2">
-            {isHighLevelView ? '3 Массовых нарушения условий содержания' : 'Все сектора в норме.'}
-          </div>
+          <h3 className="text-gray-500 text-xs font-bold tracking-widest mb-1">СТАТУС DEFCON</h3>
+          <div className={`text-3xl font-bold ${isHighLevelView ? 'text-red-500' : 'text-scp-text'}`}>УРОВЕНЬ 4</div>
+          <div className="text-xs text-gray-400 mt-2">Все сектора в норме.</div>
         </div>
 
         <div className="bg-scp-panel border border-gray-800 p-4 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            {isHighLevelView ? <Skull size={64} className="text-red-500" /> : <Lock size={64} className="text-blue-500" />}
+            <Lock size={64} className={isHighLevelView ? "text-yellow-500" : "text-blue-500"} />
           </div>
-          <h3 className="text-gray-500 text-xs font-bold tracking-widest mb-1">
-            {isHighLevelView ? 'ОРДЕРЫ НА УСТРАНЕНИЕ' : 'ЦЕЛОСТНОСТЬ ПЕРИМЕТРА'}
-          </h3>
-          <div className="text-3xl font-bold text-blue-400">
-            {isHighLevelView ? '12 В ОЖИДАНИИ' : '98.4%'}
-          </div>
-          <div className="text-xs text-yellow-500 mt-2">
-             {isHighLevelView ? 'Требуется подтверждение О5' : 'Флуктуации в Секторе 7 [Евклид].'}
-          </div>
+          <h3 className="text-gray-500 text-xs font-bold tracking-widest mb-1">ЦЕЛОСТНОСТЬ ПЕРИМЕТРА</h3>
+          <div className={`text-3xl font-bold ${isHighLevelView ? 'text-yellow-500' : 'text-blue-400'}`}>98.4%</div>
+          <div className="text-xs text-yellow-500 mt-2">Флуктуации в Секторе 7 [Евклид].</div>
         </div>
 
         <div className="bg-scp-panel border border-gray-800 p-4 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Users size={64} className="text-purple-500" />
+            <Users size={64} className={isHighLevelView ? "text-yellow-500" : "text-purple-500"} />
           </div>
-          <h3 className="text-gray-500 text-xs font-bold tracking-widest mb-1">
-            {isHighLevelView ? 'АКТИВЫ ФОНДА' : 'ПЕРСОНАЛ НА МЕСТЕ'}
-          </h3>
-          <div className="text-3xl font-bold text-purple-400">
-            {isHighLevelView ? '342,891' : personnelCount}
-          </div>
-          <div className="text-xs text-gray-400 mt-2">
-             {dbStatus === 'ONLINE' ? 'Синхронизация с Мейнфреймом' : 'Локальные данные'}
-          </div>
+          <h3 className="text-gray-500 text-xs font-bold tracking-widest mb-1">ПЕРСОНАЛ НА МЕСТЕ</h3>
+          <div className={`text-3xl font-bold ${isHighLevelView ? 'text-yellow-500' : 'text-purple-400'}`}>{personnelCount}</div>
+          <div className="text-xs text-gray-400 mt-2">{dbStatus === 'ONLINE' ? 'Синхронизация с Мейнфреймом' : 'Локальный реестр'}</div>
         </div>
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Breach History */}
         <div className="bg-scp-panel border border-gray-800 p-6">
            <h3 className="text-sm font-bold tracking-widest text-gray-400 mb-6 flex items-center">
              <Activity className="mr-2 w-4 h-4" /> ОТЧЕТ ОБ ИНЦИДЕНТАХ (НЕДЕЛЯ)
@@ -159,17 +134,13 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
                <BarChart data={breachData}>
                  <XAxis dataKey="name" stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
                  <YAxis stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                 <Tooltip 
-                    contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }}
-                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                 />
+                 <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
                  <Bar dataKey="breaches" fill={isHighLevelView ? '#eab308' : "#d32f2f"} radius={[2, 2, 0, 0]} />
                </BarChart>
              </ResponsiveContainer>
            </div>
         </div>
 
-        {/* Hume Levels / Energy */}
         <div className="bg-scp-panel border border-gray-800 p-6">
            <h3 className="text-sm font-bold tracking-widest text-gray-400 mb-6 flex items-center">
              <Radio className="mr-2 w-4 h-4" /> {isHighLevelView ? 'ГЛОБАЛЬНЫЙ ФОН ЮМА' : 'СТАБИЛЬНОСТЬ ЯКОРЕЙ РЕАЛЬНОСТИ'}
@@ -179,9 +150,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
                <LineChart data={energyData}>
                  <XAxis dataKey="time" stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
                  <YAxis domain={[0, 100]} stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                 <Tooltip 
-                    contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }}
-                 />
+                 <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }} />
                  <Line type="monotone" dataKey="level" stroke={isHighLevelView ? '#eab308' : "#33ff33"} strokeWidth={2} dot={{fill: isHighLevelView ? '#eab308' : '#33ff33'}} />
                </LineChart>
              </ResponsiveContainer>
@@ -189,7 +158,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
         </div>
       </div>
 
-      {/* Recent Alerts */}
       <div className="bg-scp-panel border border-gray-800">
         <div className="p-4 border-b border-gray-800 bg-gray-900/50">
           <h3 className="text-sm font-bold tracking-widest text-gray-300">ПОСЛЕДНИЕ СИСТЕМНЫЕ ЛОГИ</h3>
