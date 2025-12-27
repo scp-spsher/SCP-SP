@@ -59,12 +59,12 @@ const Layout: React.FC<LayoutProps> = ({
   const navItems = [
     { id: 'dashboard', label: isO5View ? 'ГЛАЗ БОГА' : 'ОБЗОР', icon: isO5View ? Eye : Activity, minClearance: 0 },
     { id: 'profile', label: 'ID КАРТА', icon: UserCircle, minClearance: 0 },
-    { id: 'messages', label: 'СООБЩЕНИЯ', icon: Mail, minClearance: 0, showBadge: true },
     { id: 'database', label: 'АРХИВ', icon: Database, minClearance: 2 },
     { id: 'reports', label: 'ОТЧЕТЫ', icon: FileText, minClearance: 1 },
     { id: 'comms', label: 'СПЕЦСВЯЗЬ', icon: MessageSquare, minClearance: 3 },
     { id: 'terminal', label: 'ТЕРМИНАЛ', icon: Terminal, minClearance: 4 },
     { id: 'admin', label: 'ПЕРСОНАЛ', icon: Users, minClearance: 5 },
+    { id: 'messages', label: 'СВЯЗЬ С АДМИНИСТРАЦИЕЙ', icon: Mail, minClearance: 0, showBadge: true },
     { id: 'guide', label: 'РУКОВОДСТВО', icon: BookOpen, minClearance: 0 },
   ];
 
