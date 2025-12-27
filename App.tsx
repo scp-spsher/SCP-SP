@@ -10,6 +10,7 @@ import Reports from './components/Reports';
 import Guide from './components/Guide';
 import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
+import AdminChat from './components/AdminChat';
 import { authService, StoredUser } from './services/authService';
 
 const App: React.FC = () => {
@@ -17,7 +18,7 @@ const App: React.FC = () => {
   const [viewedUser, setViewedUser] = useState<StoredUser | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [simulatedClearance, setSimulatedClearance] = useState<number>(1);
+  const [simulatedClearance, setSimulatedClearance] = useState<number>(0);
 
   useEffect(() => {
     const initApp = async () => {
@@ -57,7 +58,7 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setViewedUser(null);
     setCurrentPage('dashboard');
-    setSimulatedClearance(1);
+    setSimulatedClearance(0);
   };
 
   const handleProfileUpdate = (updatedUser: StoredUser) => {
@@ -79,9 +80,7 @@ const App: React.FC = () => {
   };
 
   const handleNavigate = (page: string) => {
-      if (page === 'profile') {
-          setViewedUser(null);
-      }
+      if (page === 'profile') setViewedUser(null);
       setCurrentPage(page);
   };
 
@@ -112,6 +111,7 @@ const App: React.FC = () => {
           isViewingSelf={!viewedUser}
         />
       );
+      case 'messages': return <AdminChat currentUser={currentUser} />;
       case 'database': return <Database />;
       case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
