@@ -25,7 +25,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   
   const hasInitialFetched = useRef(false);
 
-  // ГЛУБОКАЯ ПРОВЕРКА ПРАВ (Deep Authorization)
+  // ГЛУБОКАЯ ПРОВЕРКА ПРАВ
   const userPrivileges = useMemo(() => {
     const currentLevel = Number(effectiveClearance);
     const accountLevel = Number(user.clearance);
@@ -74,7 +74,6 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         setUsingLocalFallback(false);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data || []));
       } catch (e: any) {
-        console.warn("Sync Issue:", e.message);
         setUsingLocalFallback(true);
         loadLocalReports();
       } finally {
@@ -163,42 +162,56 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     console.log("[TERMINAL] Уничтожение записи:", reportId);
     
     const backupReports = [...reports];
+    // Оптимистичное удаление из UI
     setReports(prev => prev.filter(r => r.id !== reportId));
     setSelectedReport(null);
     setView('list');
     setIsConfirmingDelete(false);
-    setStatusMessage({ text: 'ИНИЦИАЦИЯ УДАЛЕНИЯ...', type: 'success' });
+    setStatusMessage({ text: 'ЗАПРОС НА УДАЛЕНИЕ ОТПРАВЛЕН...', type: 'success' });
 
     try {
-      let dbError = null;
+      let deletionConfirmed = false;
+      
       if (isSupabaseConfigured() && !usingLocalFallback) {
-        const { error } = await supabase!
+        // ВАЖНО: Используем .select(), чтобы проверить, была ли строка реально удалена
+        const { data, error } = await supabase!
           .from('reports')
           .delete()
-          .eq('id', reportId);
-        if (error) dbError = error;
-      }
-
-      if (dbError) {
-        // Если ошибка 42501 — это RLS. Нужно показать SQL решение.
-        if (dbError.code === '42501') {
-           setRlsErrorDetected(true);
-           throw new Error("ОШИБКА БЕЗОПАСНОСТИ БАЗЫ ДАННЫХ (RLS). УДАЛЕНИЕ ЗАБЛОКИРОВАНО СЕРВЕРОМ.");
+          .eq('id', reportId)
+          .select();
+        
+        if (error) {
+          if (error.code === '42501') {
+            setRlsErrorDetected(true);
+            throw new Error("ОШИБКА RLS: БАЗА ДАННЫХ ЗАБЛОКИРОВАЛА УДАЛЕНИЕ.");
+          }
+          throw error;
         }
-        throw dbError;
+
+        // Если data пуст, значит RLS молча отфильтровал запрос (строка не найдена или нет прав)
+        if (!data || data.length === 0) {
+          setRlsErrorDetected(true);
+          throw new Error("СЕРВЕР ОТКЛОНИЛ УДАЛЕНИЕ: ПРОВЕРЬТЕ ПРАВА RLS В SUPABASE.");
+        }
+        
+        deletionConfirmed = true;
+      } else {
+        deletionConfirmed = true; // В локальном режиме всегда успех
       }
 
-      const localRaw = localStorage.getItem(STORAGE_KEY);
-      if (localRaw) {
-        const local = JSON.parse(localRaw);
-        const filtered = local.filter((r: any) => r.id !== reportId);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      if (deletionConfirmed) {
+        const localRaw = localStorage.getItem(STORAGE_KEY);
+        if (localRaw) {
+          const local = JSON.parse(localRaw);
+          const filtered = local.filter((r: any) => r.id !== reportId);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+        }
+        setStatusMessage({ text: 'ЗАПИСЬ УСПЕШНО УДАЛЕНА ИЗ БАЗЫ', type: 'success' });
       }
 
-      setStatusMessage({ text: 'ЗАПИСЬ УСПЕШНО УДАЛЕНА', type: 'success' });
-      setTimeout(() => setStatusMessage(null), 3000);
     } catch (e: any) {
       console.error("[TERMINAL] Сбой удаления:", e.message);
+      // Возвращаем запись в список, если произошла ошибка
       setReports(backupReports);
       setStatusMessage({ text: e.message.toUpperCase(), type: 'error' });
     }
@@ -207,7 +220,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   const copyRlsFix = () => {
     const sql = `CREATE POLICY "Allow Admins to delete any report" ON public.reports FOR DELETE TO authenticated USING ((SELECT clearance FROM public.personnel WHERE id = auth.uid()) >= 5);`;
     navigator.clipboard.writeText(sql);
-    alert("SQL-команда скопирована. Выполните её в SQL Editor вашего Supabase проекта.");
+    alert("SQL-команда скопирована.");
   };
 
   // ФИЛЬТРАЦИЯ
@@ -243,7 +256,6 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     }
   };
 
-  // ПРОВЕРКА ПРАВ НА УДАЛЕНИЕ (Ультимативная версия)
   const canDelete = useMemo(() => {
     if (!selectedReport) return false;
     if (user.id === selectedReport.author_id) return true;
@@ -259,20 +271,21 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
       {/* RLS ERROR ALERT */}
       {rlsErrorDetected && (
-        <div className="bg-red-900/30 border-2 border-red-500 p-6 flex flex-col gap-4 animate-in slide-in-from-top-4">
+        <div className="bg-red-900/30 border-2 border-red-500 p-6 flex flex-col gap-4 animate-in slide-in-from-top-4 shadow-[0_0_30px_rgba(220,38,38,0.2)]">
            <div className="flex items-center gap-3 text-red-500 font-bold uppercase tracking-widest">
-             <AlertTriangle size={24} /> Критическая ошибка доступа базы данных
+             <AlertTriangle size={24} /> Критический сбой RLS на хостинге
            </div>
            <p className="text-xs text-gray-300 font-mono leading-relaxed">
-             Приложение разрешает вам удаление (L-{userPrivileges.level}), но ваша база данных на хостинге Supabase заблокировала запрос из-за политик RLS. 
-             Для решения выполните следующую SQL-команду в панели управления Supabase:
+             Ваш интерфейс имеет допуск L-{userPrivileges.level}, но удаление в базе данных Supabase заблокировано правилами сервера. 
+             Для исправления выполните этот SQL-скрипт в панели управления вашего проекта:
            </p>
            <div className="bg-black p-4 border border-gray-700 font-mono text-[10px] text-scp-terminal relative group">
-              <code>CREATE POLICY "Admins Delete All" ON reports FOR DELETE USING ((SELECT clearance FROM personnel WHERE id = auth.uid()) &gt;= 5);</code>
+              <code className="block break-all">CREATE POLICY "Allow Delete For L5" ON reports FOR DELETE USING ((SELECT clearance FROM personnel WHERE id = auth.uid()) &gt;= 5);</code>
               <button onClick={copyRlsFix} className="absolute right-2 top-2 p-2 bg-gray-800 hover:bg-white hover:text-black transition-colors rounded">
                  <Copy size={14} />
               </button>
            </div>
+           <p className="text-[9px] text-gray-500 italic uppercase">Без этого скрипта удаление чужих записей на хостинге технически невозможно.</p>
         </div>
       )}
 
@@ -337,7 +350,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center gap-4 py-32">
                   <RefreshCw className="animate-spin text-scp-terminal" size={32} />
-                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">Синхронизация реестра...</span>
+                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">Синхронизация...</span>
                 </div>
               ) : visibleReports.length > 0 ? (
                 <table className="w-full text-left border-collapse">
