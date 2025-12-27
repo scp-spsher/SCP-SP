@@ -1,24 +1,47 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
+import { StoredUser } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { StoredUser, authService } from '../services/authService';
 
 const STORAGE_KEY = 'scp_net_reports_local';
 
-const Reports: React.FC = () => {
+interface ReportsProps {
+  user: StoredUser;
+}
+
+const Reports: React.FC<ReportsProps> = ({ user }) => {
   const [reports, setReports] = useState<SCPReport[]>([]);
   const [view, setView] = useState<'list' | 'create' | 'detail'>('list');
   const [selectedReport, setSelectedReport] = useState<SCPReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'error' | 'success'} | null>(null);
+  const [usingLocalFallback, setUsingLocalFallback] = useState(false);
   
+  const hasInitialFetched = useRef(false);
+
+  const loadLocalReports = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const localData = JSON.parse(raw);
+        setReports(localData);
+        setUsingLocalFallback(true);
+        return localData;
+      }
+    } catch (e) {
+      console.error("Local load error", e);
+    }
+    setReports([]);
+    return [];
+  }, []);
+
   const fetchReports = useCallback(async () => {
-    if (!currentUser) return;
+    if (!user) return;
     setIsLoading(true);
+    setStatusMessage(null);
     
     if (isSupabaseConfigured()) {
       try {
@@ -29,37 +52,41 @@ const Reports: React.FC = () => {
         
         if (error) throw error;
         
-        if (data) {
-          setReports(data);
-          // Синхронизируем локальное хранилище для оффлайн доступа
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        }
+        setReports(data || []);
+        setUsingLocalFallback(false);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data || []));
       } catch (e: any) {
-        console.error("DB Fetch Error:", e);
-        loadLocalReports();
+        const errorText = e.message || String(e);
+        console.warn("Sync Issue:", errorText);
+        
+        // Handle "Failed to fetch" (Network Error)
+        if (errorText.includes('fetch') || errorText.includes('NetworkError')) {
+          setUsingLocalFallback(true);
+          loadLocalReports();
+          setStatusMessage({ text: 'КАНАЛ СВЯЗИ ПРЕРВАН: ИСПОЛЬЗУЕТСЯ ЛОКАЛЬНЫЙ БУФЕР', type: 'error' });
+        } else if (errorText.includes('42P01')) {
+          setStatusMessage({ text: 'ОШИБКА БД: ТАБЛИЦА REPORTS НЕ НАЙДЕНА', type: 'error' });
+          loadLocalReports();
+        } else {
+          setStatusMessage({ text: `ОШИБКА: ${errorText.toUpperCase()}`, type: 'error' });
+          loadLocalReports();
+        }
+      } finally {
+        setIsLoading(false);
       }
     } else {
+      setUsingLocalFallback(true);
       loadLocalReports();
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [currentUser]);
-
-  const loadLocalReports = () => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      setReports(JSON.parse(raw));
-    }
-  };
+  }, [user, loadLocalReports]);
 
   useEffect(() => {
-    // При монтировании обновляем сессию и тянем данные
-    const init = async () => {
-      const fresh = await authService.refreshSession();
-      if (fresh) setCurrentUser(fresh);
+    if (!hasInitialFetched.current && user) {
       fetchReports();
-    };
-    init();
-  }, [fetchReports]);
+      hasInitialFetched.current = true;
+    }
+  }, [fetchReports, user]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -69,17 +96,36 @@ const Reports: React.FC = () => {
     target_id: ''
   });
 
+  const saveToBoth = async (report: SCPReport) => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const existing = raw ? JSON.parse(raw) : [];
+    const updated = [report, ...existing];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    if (isSupabaseConfigured() && !usingLocalFallback) {
+      try {
+        const { error } = await supabase!.from('reports').insert([report]);
+        if (error) throw error;
+        return true;
+      } catch (e) {
+        console.warn("Failed to sync new report, kept in local buffer");
+        return false;
+      }
+    }
+    return false;
+  };
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
+    if (!user) return;
     setIsSubmitting(true);
     setStatusMessage(null);
 
     const newReport: SCPReport = {
       id: `REP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-      author_id: currentUser.id,
-      author_name: currentUser.name,
-      author_clearance: currentUser.clearance,
+      author_id: user.id,
+      author_name: user.name,
+      author_clearance: user.clearance,
       type: formData.type,
       title: formData.title,
       content: formData.content,
@@ -90,20 +136,13 @@ const Reports: React.FC = () => {
     };
 
     try {
-      if (isSupabaseConfigured()) {
-        const { error } = await supabase!.from('reports').insert([newReport]);
-        if (error) {
-          // Если ошибка RLS или отсутствие таблицы - сохраняем локально
-          console.warn("Supabase insert failed, using local fallback", error);
-          saveLocalReport(newReport);
-        }
-      } else {
-        saveLocalReport(newReport);
-      }
-
-      // Оптимистичное обновление
+      const savedToDb = await saveToBoth(newReport);
       setReports(prev => [newReport, ...prev]);
-      setStatusMessage({ text: 'РАПОРТ УСПЕШНО ПЕРЕДАН В АРХИВ', type: 'success' });
+      
+      setStatusMessage({ 
+        text: savedToDb ? 'РАПОРТ ПЕРЕДАН В ЦЕНТРАЛЬНЫЙ АРХИВ' : 'РАПОРТ СОХРАНЕН ЛОКАЛЬНО (СЕЙВ-ФАЙЛ)', 
+        type: 'success' 
+      });
       
       setTimeout(() => {
         setFormData({ title: '', type: 'INCIDENT', severity: 'LOW', content: '', target_id: '' });
@@ -112,56 +151,30 @@ const Reports: React.FC = () => {
       }, 1500);
 
     } catch (err: any) {
-      console.error("Critical report save error:", err);
-      setStatusMessage({ 
-        text: `ОШИБКА: ${err.message || 'СБОЙ СИСТЕМЫ'}`, 
-        type: 'error' 
-      });
+      setStatusMessage({ text: `СБОЙ ЗАПИСИ: ${err.message || 'ОШИБКА'}`, type: 'error' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const saveLocalReport = (report: SCPReport) => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const existing = raw ? JSON.parse(raw) : [];
-    const updated = [report, ...existing];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  };
-
   const handleDelete = async (id: string) => {
     if (!window.confirm("Удалить отчет из архива?")) return;
-    
     try {
-      if (isSupabaseConfigured()) {
-        const { error } = await supabase!.from('reports').delete().eq('id', id);
-        if (error) throw error;
+      if (isSupabaseConfigured() && !usingLocalFallback) {
+        await supabase!.from('reports').delete().eq('id', id);
       }
       setReports(prev => prev.filter(r => r.id !== id));
-      
-      // Обновляем локальную копию
-      const localRaw = localStorage.getItem(STORAGE_KEY);
-      if (localRaw) {
-        const local = JSON.parse(localRaw);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(local.filter((r: any) => r.id !== id)));
-      }
-      
+      const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(local.filter((r: any) => r.id !== id)));
       setView('list');
-      setSelectedReport(null);
-    } catch (e) {
-      alert("ОШИБКА: Недостаточно прав доступа для удаления записи.");
+    } catch (e: any) {
+      alert("Ошибка удаления: " + (e.message || "Нет прав"));
     }
   };
 
-  // Фильтруем отчеты: только те, чей author_clearance <= нашего текущего уровня
   const visibleReports = reports.filter(r => {
-    if (!currentUser) return false;
-    
-    const userLvl = currentUser.clearance || 1;
-    const hasAccess = userLvl >= r.author_clearance;
-    
-    if (!hasAccess) return false;
-
+    if (!user) return false;
+    if (user.clearance < r.author_clearance) return false;
     const query = searchTerm.toLowerCase();
     return r.title.toLowerCase().includes(query) || 
            r.id.toLowerCase().includes(query) ||
@@ -198,7 +211,7 @@ const Reports: React.FC = () => {
           <div className="flex items-center gap-2 mt-1">
             <Shield size={12} className="text-scp-terminal" />
             <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-              АВТОРИЗАЦИЯ: УРОВЕНЬ {currentUser?.clearance || 1} // ДОСТУП К ФАЙЛАМ L-{currentUser?.clearance || 1}
+              СОТРУДНИК: {user.name} // ДОСТУП: L-{user.clearance} // {usingLocalFallback ? 'РЕЖИМ: АВТОНОМНЫЙ' : 'РЕЖИМ: ОНЛАЙН'}
             </p>
           </div>
         </div>
@@ -229,7 +242,7 @@ const Reports: React.FC = () => {
             {statusMessage.type === 'success' ? <CheckCircle2 size={16}/> : <AlertTriangle size={16}/>}
             {statusMessage.text}
           </div>
-          <button onClick={() => setStatusMessage(null)} className="opacity-50 hover:opacity-100">ИГНОРИРОВАТЬ</button>
+          <button onClick={() => setStatusMessage(null)} className="opacity-50 hover:opacity-100">ЗАКРЫТЬ</button>
         </div>
       )}
 
@@ -240,7 +253,7 @@ const Reports: React.FC = () => {
               <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
               <input 
                 type="text" 
-                placeholder="ПОИСК ПО ИДЕНТИФИКАТОРУ, ТЕМЕ ИЛИ ФАМИЛИИ СОТРУДНИКА..."
+                placeholder="ПОИСК ПО ИДЕНТИФИКАТОРУ, ТЕМЕ ИЛИ ФАМИЛИИ..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-black border border-gray-800 p-3 pl-10 text-sm text-scp-terminal focus:border-scp-terminal focus:outline-none font-mono"
@@ -251,7 +264,7 @@ const Reports: React.FC = () => {
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center gap-4 py-32">
                   <RefreshCw className="animate-spin text-scp-terminal" size={32} />
-                  <span className="text-xs font-mono tracking-widest text-gray-500">СКАНИРОВАНИЕ ЗАЩИЩЕННОГО КАНАЛА...</span>
+                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">УСТАНОВКА СОЕДИНЕНИЯ...</span>
                 </div>
               ) : visibleReports.length > 0 ? (
                 <table className="w-full text-left border-collapse">
@@ -277,11 +290,9 @@ const Reports: React.FC = () => {
                         </td>
                         <td className="p-4">
                           <div className="font-bold text-gray-200 truncate max-w-[280px]">{report.title}</div>
-                          {report.target_id && <div className="text-[10px] text-gray-600 font-bold uppercase">Объект: {report.target_id}</div>}
                         </td>
                         <td className="p-4">
                           <div className="text-xs text-gray-400">{report.author_name}</div>
-                          <div className="text-[9px] text-gray-600">ID: {report.author_id.substr(0,8)}</div>
                         </td>
                         <td className="p-4 text-center">
                           <span className="text-[10px] px-1.5 py-0.5 border border-gray-700 bg-black text-gray-400">L-{report.author_clearance}</span>
@@ -298,8 +309,8 @@ const Reports: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center justify-center py-32 text-gray-700 grayscale opacity-40">
                   <Lock size={64} className="mb-4" />
-                  <p className="tracking-[0.3em] text-xs uppercase">Доступных рапортов не обнаружено</p>
-                  <button onClick={fetchReports} className="mt-4 text-[10px] border border-gray-800 px-4 py-2 hover:bg-gray-800">ПЕРЕПОДКЛЮЧИТЬСЯ</button>
+                  <p className="tracking-[0.3em] text-xs uppercase">Рапорты не найдены или доступ запрещен</p>
+                  <button onClick={fetchReports} className="mt-4 text-[10px] border border-gray-800 px-4 py-2 hover:bg-gray-800 uppercase font-bold">ОБНОВИТЬ</button>
                 </div>
               )}
             </div>
@@ -309,7 +320,7 @@ const Reports: React.FC = () => {
         {view === 'create' && (
           <div className="p-8 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
             <h3 className="text-xl font-bold text-scp-text mb-6 uppercase tracking-widest border-b border-gray-800 pb-2 flex items-center gap-2">
-              <Plus size={20} className="text-scp-accent" /> Формирование новой записи
+              <Plus size={20} className="text-scp-accent" /> Создание записи
             </h3>
             <form onSubmit={handleCreateSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -320,69 +331,60 @@ const Reports: React.FC = () => {
                     onChange={(e) => setFormData({...formData, type: e.target.value as ReportType})}
                     className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono"
                   >
-                    <option value="INCIDENT">Нарушение условий (Incident)</option>
-                    <option value="OBSERVATION">Научное наблюдение (Observation)</option>
-                    <option value="AUDIT">Проверка безопасности (Audit)</option>
-                    <option value="REQUEST">Запрос ресурсов (Request)</option>
-                    <option value="SECURITY">Контрразведка (Security)</option>
+                    <option value="INCIDENT">Нарушение условий</option>
+                    <option value="OBSERVATION">Наблюдение</option>
+                    <option value="AUDIT">Аудит</option>
+                    <option value="REQUEST">Запрос</option>
+                    <option value="SECURITY">Безопасность</option>
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Классификация угрозы</label>
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Уровень угрозы</label>
                   <select 
                     value={formData.severity}
                     onChange={(e) => setFormData({...formData, severity: e.target.value as any})}
                     className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono"
                   >
-                    <option value="LOW">LOW - Плановый</option>
-                    <option value="MEDIUM">MEDIUM - Повышенный</option>
-                    <option value="HIGH">HIGH - Критический</option>
-                    <option value="CRITICAL">CRITICAL - Немедленный ответ</option>
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                    <option value="CRITICAL">CRITICAL</option>
                   </select>
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Тема / Заголовок</label>
-                <input 
-                  required
-                  type="text" 
-                  value={formData.title}
-                  onChange={(e) => setFormData({...formData, title: e.target.value})}
-                  placeholder="Прим: Провал протокола визуального наблюдения..."
-                  className="w-full bg-black border border-gray-700 p-3 text-sm text-scp-terminal focus:border-scp-terminal focus:outline-none font-mono"
-                />
-              </div>
+              <input 
+                required
+                type="text" 
+                value={formData.title}
+                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                placeholder="Заголовок рапорта..."
+                className="w-full bg-black border border-gray-700 p-3 text-sm text-scp-terminal focus:border-scp-terminal focus:outline-none font-mono"
+              />
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Объект (SCP-####)</label>
-                <input 
-                  type="text" 
-                  value={formData.target_id}
-                  onChange={(e) => setFormData({...formData, target_id: e.target.value})}
-                  placeholder="Укажите номер объекта, если рапорт о нем"
-                  className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono"
-                />
-              </div>
+              <input 
+                type="text" 
+                value={formData.target_id}
+                onChange={(e) => setFormData({...formData, target_id: e.target.value})}
+                placeholder="Объект (SCP-####)..."
+                className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono"
+              />
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Содержание (Протокольный стиль)</label>
-                <textarea 
-                  required
-                  rows={8}
-                  value={formData.content}
-                  onChange={(e) => setFormData({...formData, content: e.target.value})}
-                  placeholder="Детально опишите событие, задействованный персонал и последствия..."
-                  className="w-full bg-black border border-gray-700 p-4 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono leading-relaxed"
-                />
-              </div>
+              <textarea 
+                required
+                rows={8}
+                value={formData.content}
+                onChange={(e) => setFormData({...formData, content: e.target.value})}
+                placeholder="Текст протокола..."
+                className="w-full bg-black border border-gray-700 p-4 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono leading-relaxed"
+              />
 
               <button 
                 type="submit" 
                 disabled={isSubmitting}
                 className="w-full bg-scp-accent hover:bg-red-700 text-white font-bold py-4 flex items-center justify-center gap-2 uppercase tracking-widest transition-all disabled:opacity-50"
               >
-                {isSubmitting ? <RefreshCw className="animate-spin" size={18}/> : <><Send size={18} /> Передать рапорт в архив</>}
+                {isSubmitting ? <RefreshCw className="animate-spin" size={18}/> : <><Send size={18} /> Передать в архив</>}
               </button>
             </form>
           </div>
@@ -399,79 +401,30 @@ const Reports: React.FC = () => {
                   <span className="text-blue-400 text-xs font-bold tracking-widest">{getTypeLabel(selectedReport.type)}</span>
                 </div>
                 <h1 className="text-3xl font-black uppercase text-white leading-tight">{selectedReport.title}</h1>
-                <div className="text-xs text-gray-500 font-mono">
-                  АРХИВНЫЙ КОД: {selectedReport.id} // ШТАМП ВРЕМЕНИ: {new Date(selectedReport.created_at).toLocaleString()}
-                </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-[10px] text-gray-500 uppercase mb-1">СЕКРЕТНОСТЬ</div>
                 <div className="text-2xl font-black text-scp-accent border-2 border-scp-accent px-4 py-1">
                   LVL-{selectedReport.author_clearance}
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="md:col-span-2 space-y-6">
-                <div>
-                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Текст протокола</h4>
-                  <div className="text-gray-300 font-mono text-sm leading-relaxed whitespace-pre-wrap bg-black/40 p-6 border border-gray-800/50 shadow-inner">
-                    {selectedReport.content}
-                  </div>
-                </div>
-                
-                {selectedReport.target_id && (
-                  <div className="p-4 border-l-4 border-blue-500 bg-blue-900/10 flex items-center gap-4">
-                    <Shield size={24} className="text-blue-500" />
-                    <div>
-                      <h4 className="text-[10px] text-blue-400 uppercase font-bold">Связанный объект</h4>
-                      <p className="font-mono text-white text-lg">{selectedReport.target_id}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div className="bg-black/40 p-6 border border-gray-800 font-mono text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+              {selectedReport.content}
+            </div>
 
-              <div className="space-y-6">
-                <div className="p-4 border border-gray-800 bg-black/50">
-                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-3">Составитель</h4>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-900 border border-gray-700 flex items-center justify-center">
-                      <Eye size={20} className="text-gray-600" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white uppercase">{selectedReport.author_name}</div>
-                      <div className="text-[9px] text-gray-500 tracking-tighter">ID: {selectedReport.author_id.substr(0,8)}...</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 border border-gray-800 bg-black/50 space-y-3">
-                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Действия</h4>
-                  <div className="text-[9px] text-green-500 font-mono flex items-center gap-2 mb-2">
-                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                    ВЕРИФИКАЦИЯ ПРОЙДЕНА
-                  </div>
-                  {currentUser && (currentUser.clearance >= 5 || currentUser.id === selectedReport.author_id) && (
-                    <button 
-                      onClick={() => handleDelete(selectedReport.id)}
-                      className="w-full flex items-center gap-2 p-2 text-[10px] text-red-500 hover:bg-red-900/20 transition-colors uppercase font-bold border border-red-900/30"
-                    >
-                      <Trash2 size={12} /> Удалить рапорт
-                    </button>
-                  )}
-                  <button className="w-full flex items-center gap-2 p-2 text-[10px] text-gray-500 hover:text-white hover:bg-gray-800 transition-colors uppercase font-bold">
-                    <Archive size={12} /> Распечатать (PDF)
-                  </button>
-                </div>
-              </div>
+            <div className="flex gap-4">
+              {user && (user.clearance >= 5 || user.id === selectedReport.author_id) && (
+                <button 
+                  onClick={() => handleDelete(selectedReport.id)}
+                  className="flex items-center gap-2 p-2 text-[10px] text-red-500 hover:bg-red-900/20 transition-colors uppercase font-bold border border-red-900/30"
+                >
+                  <Trash2 size={12} /> Удалить
+                </button>
+              )}
             </div>
           </div>
         )}
-      </div>
-      
-      <div className="flex items-center justify-center gap-4 opacity-20 py-4">
-        <Database size={14} />
-        <span className="text-[8px] uppercase tracking-widest font-mono">End of File // SCPNET Central Registry // Encryption Active</span>
       </div>
     </div>
   );
