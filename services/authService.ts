@@ -1,8 +1,10 @@
+
 import { SecurityClearance } from '../types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 const STORAGE_KEY = 'scp_net_users';
-const SESSION_KEY = 'scp_net_current_session';
+// Export SESSION_KEY to allow synchronization of session state across the application
+export const SESSION_KEY = 'scp_net_current_session';
 
 // --- CONFIGURATION ---
 export const ADMIN_EMAIL = 'arseniychekrigin@gmail.com';
@@ -34,17 +36,69 @@ export const authService = {
     }
   },
 
+  // Attempt to recover a lost local session from an active Supabase session
+  tryRecoverSession: async (): Promise<StoredUser | null> => {
+    if (!isSupabaseConfigured()) return null;
+
+    try {
+      const { data: { session } } = await supabase!.auth.getSession();
+      if (!session || !session.user) return null;
+
+      // Found a Supabase session but no local profile session
+      // Fetch the profile to reconstruct the StoredUser object
+      const isTargetAdmin = session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+      let { data: profile, error } = await supabase!
+        .from('personnel')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (error || !profile) {
+        // If profile fetch fails, we can't reliably reconstruct the UI user
+        return null;
+      }
+
+      const recoveredUser: StoredUser = {
+        id: profile.id,
+        email: session.user.email,
+        name: profile.name || 'Агент',
+        password: '***',
+        clearance: isTargetAdmin ? 6 : (profile.clearance || 1),
+        registeredAt: profile.registered_at || new Date().toISOString(),
+        isSuperAdmin: isTargetAdmin,
+        is_approved: profile.is_approved,
+        title: profile.title,
+        department: profile.department,
+        site: profile.site,
+        avatar_url: profile.avatar_url
+      };
+
+      localStorage.setItem(SESSION_KEY, JSON.stringify(recoveredUser));
+      return recoveredUser;
+    } catch (e) {
+      console.error("Session Recovery Error:", e);
+      return null;
+    }
+  },
+
   // Refresh session data from Source of Truth (DB or LocalStorage Registry)
   refreshSession: async (): Promise<StoredUser | null> => {
     const currentSession = authService.getSession();
     if (!currentSession) return null;
 
-    const isTargetAdmin = currentSession.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    const isTargetAdmin = (currentSession.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
     // 1. DATABASE REFRESH
     if (isSupabaseConfigured()) {
       try {
-        // Try to select all fields first
+        // Check if Supabase auth session is still valid
+        const { data: { session: sbSession } } = await supabase!.auth.getSession();
+        if (!sbSession) {
+          // If Supabase says we're logged out, we should be logged out
+          return null;
+        }
+
         let { data: profile, error } = await supabase!
           .from('personnel')
           .select('*')
@@ -65,11 +119,11 @@ export const authService = {
         if (error) {
              console.warn("Session Refresh DB Error:", error);
              // Return current session if DB is unreachable (Offline tolerance)
+             // BUT only if it's a network error, not a logic error
              return currentSession; 
         }
 
         if (profile) {
-            // If user exists in DB, update session
             // Check Approval
             if (!profile.is_approved && !isTargetAdmin) return null; // Force Logout
 
@@ -78,19 +132,19 @@ export const authService = {
                 name: profile.name,
                 clearance: isTargetAdmin ? 6 : profile.clearance,
                 is_approved: profile.is_approved,
-                // Optional fields
                 title: profile.title || currentSession.title,
                 department: profile.department || currentSession.department,
                 site: profile.site || currentSession.site,
                 avatar_url: profile.avatar_url || currentSession.avatar_url,
-                registeredAt: profile.registered_at || currentSession.registeredAt
+                registeredAt: profile.registered_at || currentSession.registeredAt,
+                isSuperAdmin: isTargetAdmin
             };
             
             localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
             return updatedUser;
         } else {
-            // User not found in DB (Deleted?)
-            // If we are relying on DB, this means account is gone.
+            // User not found in personnel table? This is strange if Auth session exists.
+            // Possibly deleted by admin.
             return null;
         }
       } catch (e) {
@@ -110,9 +164,9 @@ export const authService = {
              const updatedUser: StoredUser = {
                  ...currentSession,
                  ...freshData,
-                 // Ensure Admin
                  clearance: isTargetAdmin ? 6 : freshData.clearance,
-                 isSuperAdmin: isTargetAdmin
+                 isSuperAdmin: isTargetAdmin,
+                 is_approved: isTargetAdmin ? true : freshData.is_approved
              };
              localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
              return updatedUser;
@@ -126,13 +180,9 @@ export const authService = {
   register: async (email: string, name: string, password: string, clearance: number): Promise<{ success: boolean; message: string }> => {
     
     const isTargetAdmin = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-    
-    // Auto-promote specific email to OMNI and Approve immediately
-    // For everyone else: Force Level 1 and Require Approval
     const finalClearance = isTargetAdmin ? 6 : 1;
     const isApproved = isTargetAdmin ? true : false;
 
-    // --- REAL DATABASE MODE ---
     if (isSupabaseConfigured()) {
       try {
         const { data: authData, error: authError } = await supabase!.auth.signUp({
@@ -155,7 +205,7 @@ export const authService = {
             }]);
 
           if (dbError) {
-             console.error("DB Register Error:", JSON.stringify(dbError, null, 2));
+             console.error("DB Register Error:", dbError);
           }
         }
         
@@ -169,7 +219,6 @@ export const authService = {
       }
     }
 
-    // --- LOCAL FALLBACK MODE ---
     const localData = localStorage.getItem(STORAGE_KEY);
     const localUsers: StoredUser[] = localData ? JSON.parse(localData) : [];
     
@@ -194,18 +243,13 @@ export const authService = {
     localUsers.push(newUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(localUsers));
     
-    if (isTargetAdmin) {
-        return { success: true, message: 'ЛОКАЛЬНАЯ ЗАПИСЬ СОЗДАНА [ADMIN]' };
-    }
-    return { success: true, message: 'ЗАЯВКА СОЗДАНА. ТРЕБУЕТСЯ ОДОБРЕНИЕ.' };
+    return { success: true, message: isTargetAdmin ? 'ЛОКАЛЬНАЯ ЗАПИСЬ СОЗДАНА [ADMIN]' : 'ЗАЯВКА СОЗДАНА. ТРЕБУЕТСЯ ОДОБРЕНИЕ.' };
   },
 
-  // Login
   login: async (email: string, password: string): Promise<{ success: boolean; user?: StoredUser; message: string }> => {
     
     const isTargetAdmin = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
-    // 1. DATABASE LOGIN
     if (isSupabaseConfigured()) {
       try {
         const { data: authData, error: authError } = await supabase!.auth.signInWithPassword({
@@ -218,35 +262,27 @@ export const authService = {
         }
 
         if (authData.user) {
-          // Fetch Profile including is_approved and avatar_url
-          // We try to fetch everything first
           let { data: profile, error: dbError } = await supabase!
             .from('personnel')
             .select('id, name, clearance, registered_at, is_approved, avatar_url, title, department, site')
             .eq('id', authData.user.id)
             .maybeSingle();
           
-          // ERROR HANDLING: 42703 = Column does not exist
-          // If the DB schema isn't updated yet, fall back to basic fields so user can still login
           if (dbError && dbError.code === '42703') {
-             console.warn("DB Schema mismatch: Missing new columns. Falling back to basic profile fetch.");
              const retry = await supabase!
                 .from('personnel')
-                .select('id, name, clearance, registered_at, is_approved, avatar_url') // Removed title/dept/site
+                .select('id, name, clearance, registered_at, is_approved, avatar_url')
                 .eq('id', authData.user.id)
                 .maybeSingle();
-             
              profile = retry.data;
              dbError = retry.error;
           }
             
           if (dbError) {
-              console.error("Login Profile Fetch Error:", JSON.stringify(dbError, null, 2));
-              
-              if (isTargetAdmin && (dbError.code === '42P17' || dbError.code === '42501')) {
+              if (isTargetAdmin) {
                  const recoveryUser: StoredUser = {
                     id: authData.user.id,
-                    email: authData.user.email,
+                    email: authData.user.email || email,
                     name: 'АДМИНИСТРАТОР [ВОССТАНОВЛЕНИЕ]',
                     password: '***',
                     clearance: 6,
@@ -260,7 +296,7 @@ export const authService = {
                  localStorage.setItem(SESSION_KEY, JSON.stringify(recoveryUser));
                  return { success: true, user: recoveryUser, message: 'СБОЙ БД: АВАРИЙНЫЙ ВХОД АДМИНИСТРАТОРА' };
               }
-              return { success: false, message: `ОШИБКА БАЗЫ ДАННЫХ: ${dbError.code || 'НЕИЗВЕСТНАЯ ОШИБКА'}` };
+              return { success: false, message: `ОШИБКА БАЗЫ ДАННЫХ: ${dbError.code}` };
           }
 
           const isApproved = profile?.is_approved ?? (isTargetAdmin ? true : false);
@@ -270,14 +306,12 @@ export const authService = {
               return { success: false, message: 'ДОСТУП ОГРАНИЧЕН: ОЖИДАЕТСЯ ПОДТВЕРЖДЕНИЕ АДМИНИСТРАТОРА' };
           }
 
-          const effectiveClearance = isTargetAdmin ? 6 : (profile?.clearance ?? 1);
-
           const user: StoredUser = {
             id: profile?.id || authData.user.id,
-            email: authData.user.email,
+            email: authData.user.email || email,
             name: profile?.name || 'Неизвестный агент',
             password: '***',
-            clearance: effectiveClearance,
+            clearance: isTargetAdmin ? 6 : (profile?.clearance ?? 1),
             registeredAt: profile?.registered_at || new Date().toISOString(),
             isSuperAdmin: isTargetAdmin,
             is_approved: true,
@@ -287,20 +321,14 @@ export const authService = {
             avatar_url: profile?.avatar_url
           };
           
-          if (isTargetAdmin) {
-             user.clearance = 6;
-          }
-
           localStorage.setItem(SESSION_KEY, JSON.stringify(user));
           return { success: true, user, message: 'ЛИЧНОСТЬ ПОДТВЕРЖДЕНА [REMOTE]' };
         }
       } catch (err: any) {
-         console.error("Login System Error:", err);
          return { success: false, message: `СИСТЕМНАЯ ОШИБКА: ${err.message}` };
       }
     }
 
-    // 2. LOCAL FALLBACK
     const localData = localStorage.getItem(STORAGE_KEY);
     const localUsers: StoredUser[] = localData ? JSON.parse(localData) : [];
     const localUser = localUsers.find(u => (u.email || u.id).toLowerCase() === email.toLowerCase() && u.password === password);
@@ -309,7 +337,7 @@ export const authService = {
       if (!localUser.is_approved && !localUser.isSuperAdmin) {
           return { success: false, message: 'ДОСТУП ОГРАНИЧЕН: ОЖИДАЕТСЯ ПОДТВЕРЖДЕНИЕ АДМИНИСТРАТОРА' };
       }
-      if (localUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      if ((localUser.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
           localUser.isSuperAdmin = true;
           localUser.clearance = 6;
           localUser.is_approved = true;
@@ -321,43 +349,25 @@ export const authService = {
     return { success: false, message: 'ДОСТУП ЗАПРЕЩЕН: ПОЛЬЗОВАТЕЛЬ НЕ НАЙДЕН' };
   },
 
-  // Update Avatar via Storage
   uploadAvatar: async (userId: string, file: File): Promise<{ success: boolean; url?: string; message: string }> => {
-     if (!isSupabaseConfigured()) {
-       return { success: false, message: 'ХРАНИЛИЩЕ НЕДОСТУПНО (OFFLINE)' };
-     }
+     if (!isSupabaseConfigured()) return { success: false, message: 'ХРАНИЛИЩЕ НЕДОСТУПНО (OFFLINE)' };
 
      try {
        const fileExt = file.name.split('.').pop();
        const fileName = `${userId}-${Date.now()}.${fileExt}`;
        const filePath = `${fileName}`;
 
-       // 1. Upload
        const { error: uploadError } = await supabase!.storage
          .from('avatars')
          .upload(filePath, file);
 
-       if (uploadError) {
-         console.error('Storage Upload Error:', uploadError);
-         return { success: false, message: `ОШИБКА ЗАГРУЗКИ: ${uploadError.message}` };
-       }
+       if (uploadError) return { success: false, message: `ОШИБКА ЗАГРУЗКИ: ${uploadError.message}` };
 
-       // 2. Get URL
        const { data } = supabase!.storage.from('avatars').getPublicUrl(filePath);
        const publicUrl = data.publicUrl;
 
-       // 3. Update DB
-       const { error: dbError } = await supabase!
-         .from('personnel')
-         .update({ avatar_url: publicUrl })
-         .eq('id', userId);
+       await supabase!.from('personnel').update({ avatar_url: publicUrl }).eq('id', userId);
 
-       if (dbError) {
-         console.error('DB Update Error:', dbError);
-         return { success: false, message: `ОШИБКА БД: ${dbError.message}` };
-       }
-
-       // 4. Update Session
        const sessionData = localStorage.getItem(SESSION_KEY);
        if (sessionData) {
           const session = JSON.parse(sessionData);
@@ -366,7 +376,6 @@ export const authService = {
        }
 
        return { success: true, url: publicUrl, message: 'БИОМЕТРИЯ ОБНОВЛЕНА' };
-
      } catch (e: any) {
         return { success: false, message: `СИСТЕМНЫЙ СБОЙ: ${e.message}` };
      }
