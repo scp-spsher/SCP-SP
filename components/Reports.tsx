@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X, ShieldAlert, Crown, Copy, Info } from 'lucide-react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X, ShieldAlert, Crown, Copy, Info, Fingerprint } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
 import { StoredUser } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -25,12 +25,12 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   
   const hasInitialFetched = useRef(false);
 
-  // ГЛУБОКАЯ ПРОВЕРКА ПРАВ
+  // ГЛУБОКАЯ ПРОВЕРКА ПРАВ (С защитой от NaN)
   const userPrivileges = useMemo(() => {
-    const currentLevel = Number(effectiveClearance);
-    const accountLevel = Number(user.clearance);
-    const isActuallyAdmin = currentLevel >= 5 || accountLevel >= 5 || user.isSuperAdmin === true;
-    const isActuallyOmni = currentLevel === 6 || accountLevel === 6 || user.isSuperAdmin === true;
+    const currentLevel = Number(effectiveClearance) || 1;
+    const accountLevel = Number(user?.clearance) || 1;
+    const isActuallyAdmin = currentLevel >= 5 || accountLevel >= 5 || user?.isSuperAdmin === true;
+    const isActuallyOmni = currentLevel === 6 || accountLevel === 6 || user?.isSuperAdmin === true;
     
     return {
       isAdmin: isActuallyAdmin,
@@ -162,7 +162,6 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     console.log("[TERMINAL] Уничтожение записи:", reportId);
     
     const backupReports = [...reports];
-    // Оптимистичное удаление из UI
     setReports(prev => prev.filter(r => r.id !== reportId));
     setSelectedReport(null);
     setView('list');
@@ -173,7 +172,6 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
       let deletionConfirmed = false;
       
       if (isSupabaseConfigured() && !usingLocalFallback) {
-        // ВАЖНО: Используем .select(), чтобы проверить, была ли строка реально удалена
         const { data, error } = await supabase!
           .from('reports')
           .delete()
@@ -188,7 +186,6 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
           throw error;
         }
 
-        // Если data пуст, значит RLS молча отфильтровал запрос (строка не найдена или нет прав)
         if (!data || data.length === 0) {
           setRlsErrorDetected(true);
           throw new Error("СЕРВЕР ОТКЛОНИЛ УДАЛЕНИЕ: ПРОВЕРЬТЕ ПРАВА RLS В SUPABASE.");
@@ -196,7 +193,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         
         deletionConfirmed = true;
       } else {
-        deletionConfirmed = true; // В локальном режиме всегда успех
+        deletionConfirmed = true; 
       }
 
       if (deletionConfirmed) {
@@ -211,16 +208,27 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
 
     } catch (e: any) {
       console.error("[TERMINAL] Сбой удаления:", e.message);
-      // Возвращаем запись в список, если произошла ошибка
       setReports(backupReports);
       setStatusMessage({ text: e.message.toUpperCase(), type: 'error' });
     }
   };
 
   const copyRlsFix = () => {
-    const sql = `CREATE POLICY "Allow Admins to delete any report" ON public.reports FOR DELETE TO authenticated USING ((SELECT clearance FROM public.personnel WHERE id = auth.uid()) >= 5);`;
+    const sql = `
+-- 1. Разрешить авторам удалять свои отчеты
+CREATE POLICY "Allow authors to delete own reports" 
+ON public.reports FOR DELETE 
+TO authenticated 
+USING (auth.uid() = author_id);
+
+-- 2. Разрешить администраторам (L5+) удалять любые отчеты
+CREATE POLICY "Allow Admins (L5+) to delete all reports" 
+ON public.reports FOR DELETE 
+TO authenticated 
+USING ((SELECT clearance FROM public.personnel WHERE id = auth.uid()) >= 5);
+    `.trim();
     navigator.clipboard.writeText(sql);
-    alert("SQL-команда скопирована.");
+    alert("Полный SQL-скрипт скопирован.");
   };
 
   // ФИЛЬТРАЦИЯ
@@ -276,16 +284,31 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
              <AlertTriangle size={24} /> Критический сбой RLS на хостинге
            </div>
            <p className="text-xs text-gray-300 font-mono leading-relaxed">
-             Ваш интерфейс имеет допуск L-{userPrivileges.level}, но удаление в базе данных Supabase заблокировано правилами сервера. 
-             Для исправления выполните этот SQL-скрипт в панели управления вашего проекта:
+             Ваш интерфейс имеет допуск L-{userPrivileges.level}, но удаление заблокировано сервером. 
+             Это происходит, если вы вставили не все политики или в таблице <code className="text-white">personnel</code> нет записи для вашего текущего пользователя.
            </p>
+           
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-black/50 p-3 border border-gray-700">
+                 <div className="text-[10px] text-gray-500 uppercase mb-1 flex items-center gap-1"><Fingerprint size={10}/> Ваш UID в системе</div>
+                 <div className="text-[10px] font-mono text-scp-terminal break-all">{user.id}</div>
+              </div>
+              <div className="bg-black/50 p-3 border border-gray-700">
+                 <div className="text-[10px] text-gray-500 uppercase mb-1">Проверьте таблицу personnel</div>
+                 <div className="text-[10px] font-mono text-gray-400">Убедитесь, что строка с этим ID имеет <code className="text-white">clearance &gt;= 5</code></div>
+              </div>
+           </div>
+
            <div className="bg-black p-4 border border-gray-700 font-mono text-[10px] text-scp-terminal relative group">
-              <code className="block break-all">CREATE POLICY "Allow Delete For L5" ON reports FOR DELETE USING ((SELECT clearance FROM personnel WHERE id = auth.uid()) &gt;= 5);</code>
+              <div className="mb-2 text-gray-500 italic">-- Скопируйте и выполните этот скрипт целиком:</div>
+              <code className="block whitespace-pre-wrap">
+CREATE POLICY "Allow authors to delete own reports" ON reports FOR DELETE USING (auth.uid() = author_id);
+CREATE POLICY "Allow Admins to delete all reports" ON reports FOR DELETE USING ((SELECT clearance FROM personnel WHERE id = auth.uid()) &gt;= 5);
+              </code>
               <button onClick={copyRlsFix} className="absolute right-2 top-2 p-2 bg-gray-800 hover:bg-white hover:text-black transition-colors rounded">
                  <Copy size={14} />
               </button>
            </div>
-           <p className="text-[9px] text-gray-500 italic uppercase">Без этого скрипта удаление чужих записей на хостинге технически невозможно.</p>
         </div>
       )}
 
@@ -297,7 +320,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
           <div className="flex items-center gap-2 mt-1">
             <Shield size={12} className="text-scp-terminal" />
             <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-              ОПЕРАТОР: {user.name} // ДОСТУП: L-{effectiveClearance} // {usingLocalFallback ? 'OFFLINE' : 'ONLINE'}
+              ОПЕРАТОР: {user.name} // ДОСТУП: L-{userPrivileges.level} // {usingLocalFallback ? 'OFFLINE' : 'ONLINE'}
             </p>
           </div>
         </div>
@@ -393,7 +416,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                 <div className="flex flex-col items-center justify-center py-32 text-gray-700">
                   <Lock size={64} className="mb-4 opacity-20" />
                   <p className="tracking-[0.3em] text-xs uppercase font-bold">Рапортов не найдено</p>
-                  <p className="text-[9px] mt-2 opacity-50 uppercase tracking-widest text-center">Ваш уровень допуска: L-{effectiveClearance}</p>
+                  <p className="text-[9px] mt-2 opacity-50 uppercase tracking-widest text-center">Ваш уровень допуска: L-{userPrivileges.level}</p>
                   <button onClick={fetchReports} className="mt-6 text-[10px] border border-gray-800 px-4 py-2 hover:bg-gray-800 uppercase font-bold transition-all">Обновить реестр</button>
                 </div>
               )}
