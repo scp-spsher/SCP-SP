@@ -154,7 +154,7 @@ const App: React.FC = () => {
       case 'terminal': return <TerminalComponent />;
       case 'reports': return <Reports user={currentUser} effectiveClearance={safeClearance} onViewProfile={handleViewProfile} />;
       case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} onViewProfile={handleViewProfile} />;
-      case 'guide': return <Guide />;
+      case 'guide': return <Guide currentClearance={safeClearance} />;
       default: return <Dashboard currentClearance={safeClearance} />;
     }
   };
