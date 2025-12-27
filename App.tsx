@@ -13,42 +13,48 @@ import AdminPanel from './components/AdminPanel';
 import { authService, StoredUser } from './services/authService';
 
 const App: React.FC = () => {
-  // Initialize state based on active session in localStorage
+  // Initial state from localStorage (synchronous)
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
   
   // State for Admin Simulation (View As)
-  // Defaults to 6 (Omni) for SuperAdmin, or user's actual clearance
   const [simulatedClearance, setSimulatedClearance] = useState<number>(1);
 
-  // Sync user data with backend/storage on load
   useEffect(() => {
-    const syncSession = async () => {
-      if (currentUser) {
+    const initApp = async () => {
+      let user = currentUser;
+
+      // 1. If no local session, try to recover from active Supabase auth
+      if (!user) {
+        user = await authService.tryRecoverSession();
+      }
+
+      // 2. If we have a user, try to refresh their data (e.g. check if still approved)
+      if (user) {
         const freshUser = await authService.refreshSession();
         if (!freshUser) {
-           // User deleted or unapproved
+           // User was explicitly invalidated (deleted or unapproved)
            authService.logout();
            setCurrentUser(null);
         } else {
-           // User data possibly updated
            setCurrentUser(freshUser);
         }
+      } else {
+        setCurrentUser(null);
       }
+      
+      setIsLoadingSession(false);
     };
-    syncSession();
-  }, []); // Run once on mount
+
+    initApp();
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
-       // If super admin, default to 6, otherwise use actual clearance
-       // Only update simulated clearance if it matches the previous reality (prevent overriding manual changes if we added that feature later)
-       // For now, simple logic:
        setSimulatedClearance(currentUser.isSuperAdmin ? 6 : currentUser.clearance);
     }
   }, [currentUser]);
-
-  const isAuthenticated = !!currentUser;
 
   const handleLogin = (user: StoredUser) => {
     setCurrentUser(user);
@@ -66,7 +72,19 @@ const App: React.FC = () => {
     setCurrentUser(updatedUser);
   };
 
-  if (!isAuthenticated) {
+  // Loading state while checking/restoring session
+  if (isLoadingSession) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center font-mono">
+        <div className="w-16 h-16 border-4 border-scp-terminal border-t-transparent rounded-full animate-spin mb-4"></div>
+        <div className="text-scp-terminal text-sm tracking-widest animate-pulse">
+          ВОССТАНОВЛЕНИЕ ТЕРМИНАЛЬНОЙ СЕССИИ...
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
 
@@ -89,8 +107,8 @@ const App: React.FC = () => {
       currentPage={currentPage} 
       onNavigate={setCurrentPage} 
       onLogout={handleLogout}
-      userClearance={currentUser.clearance} // Real Clearance (for reference)
-      simulatedClearance={simulatedClearance} // View As Clearance
+      userClearance={currentUser.clearance} 
+      simulatedClearance={simulatedClearance} 
       setSimulatedClearance={setSimulatedClearance}
       userEmail={currentUser.id}
       realEmail={currentUser.email}
