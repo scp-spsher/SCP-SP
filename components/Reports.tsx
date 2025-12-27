@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X, ShieldAlert, Crown } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
 import { StoredUser } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -201,9 +201,11 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     // Автор всегда видит свой отчет
     if (user.id === r.author_id) return true;
     
+    // OMNI (Уровень 6) видит всё
+    if (effectiveClearance >= 6) return true;
+
     // Если текущий уровень (в т.ч. симуляция) ниже уровня рапорта - скрываем
-    // ИСКЛЮЧЕНИЕ: Уровень 6 (OMNI) видит вообще всё.
-    if (effectiveClearance < 6 && effectiveClearance < r.author_clearance) return false;
+    if (effectiveClearance < r.author_clearance) return false;
     
     const query = searchTerm.toLowerCase();
     return r.title.toLowerCase().includes(query) || 
@@ -231,6 +233,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     }
   };
 
+  // ЯВНАЯ ПРОВЕРКА ПРАВ: УРОВЕНЬ 5 И 6 (OMNI)
   const canDelete = selectedReport && (effectiveClearance >= 5 || user.id === selectedReport.author_id);
   const isAdminOverriding = selectedReport && effectiveClearance >= 5 && user.id !== selectedReport.author_id;
 
@@ -449,7 +452,8 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
             <div className="pt-8 border-t border-gray-800">
               {isAdminOverriding && (
                 <div className="mb-4 flex items-center gap-2 text-yellow-500 bg-yellow-950/20 border border-yellow-900/50 p-3 text-[10px] font-bold uppercase tracking-widest animate-pulse">
-                  <ShieldAlert size={14} /> ВНИМАНИЕ: АКТИВИРОВАН РЕЖИМ ПЕРЕОПРЕДЕЛЕНИЯ (COUNCIL O5 / OMNI)
+                  {effectiveClearance >= 6 ? <Crown size={14} /> : <ShieldAlert size={14} />}
+                  ВНИМАНИЕ: АКТИВИРОВАН РЕЖИМ ПЕРЕОПРЕДЕЛЕНИЯ ({effectiveClearance >= 6 ? 'OMNI ACCESS' : 'COUNCIL O5'})
                 </div>
               )}
               
