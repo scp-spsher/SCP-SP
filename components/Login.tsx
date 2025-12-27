@@ -37,12 +37,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setTimeout(async () => {
       try {
         if (mode === 'register') {
-          // Default clearance is always 1 for new recruits
+          // Default clearance is always 0 for new recruits
           const result = await authService.register(
             formData.email, 
             formData.name, 
             formData.password, 
-            1 
+            0 
           );
           
           setStatus(result.message);
@@ -190,7 +190,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <div className="mt-6 flex items-start gap-2 opacity-50">
           <AlertCircle size={12} className="text-scp-accent shrink-0 mt-0.5" />
           <p className="text-[9px] text-gray-500 uppercase leading-relaxed">
-            При регистрации вам будет присвоен Уровень 1. Повышение допуска производится Советом О5 после проверки личности.
+            При регистрации вам будет присвоен Уровень 0. Вам необходимо связаться с администрацией через модуль связи для подтверждения личности.
           </p>
         </div>
       </div>
