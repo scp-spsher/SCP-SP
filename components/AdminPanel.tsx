@@ -5,6 +5,7 @@ import { StoredUser } from '../services/authService';
 import { SCPLogo } from './SCPLogo';
 
 const STORAGE_KEY = 'scp_net_users';
+const SECRET_ADMIN_ID = '36046d5d-dde4-4cf6-a2de-794334b7af5c';
 
 interface AdminPanelProps {
   currentUser: StoredUser | null;
@@ -231,6 +232,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
   };
 
   if (selectedUser && editForm) {
+    const isSecretAdmin = editForm.id === SECRET_ADMIN_ID && editForm.clearance === 6;
+    const displayClearance = isSecretAdmin ? 4 : editForm.clearance;
+
     return (
       <div className="flex flex-col h-full gap-6 animate-in slide-in-from-right-4 duration-300">
         <div className="flex items-center justify-between border-b border-gray-800 pb-4">
@@ -277,14 +281,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                     <select 
                         value={editForm.clearance}
                         onChange={(e) => handleFormChange('clearance', Number(e.target.value))}
-                        className="bg-black border border-scp-accent text-scp-accent text-xl font-bold p-2 text-right focus:outline-none"
+                        className={`bg-black border ${isSecretAdmin ? 'border-scp-terminal text-scp-terminal' : 'border-scp-accent text-scp-accent'} text-xl font-bold p-2 text-right focus:outline-none`}
                     >
-                        <option value={1}>L-1</option>
-                        <option value={2}>L-2</option>
-                        <option value={3}>L-3</option>
-                        <option value={4}>L-4</option>
-                        <option value={5}>L-5</option>
-                        <option value={6}>OMNI</option>
+                        {isSecretAdmin ? (
+                           <option value={6}>L-4 (MASKED)</option>
+                        ) : (
+                          <>
+                            <option value={1}>L-1</option>
+                            <option value={2}>L-2</option>
+                            <option value={3}>L-3</option>
+                            <option value={4}>L-4</option>
+                            <option value={5}>L-5</option>
+                            <option value={6}>OMNI</option>
+                          </>
+                        )}
                     </select>
                  </div>
               </div>
@@ -412,7 +422,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                     </tr>
                 </thead>
                 <tbody className="text-sm font-mono text-gray-300 divide-y divide-gray-800">
-                    {users.map((user) => (
+                    {users.map((user) => {
+                        const isUserSecretAdmin = user.id === SECRET_ADMIN_ID && user.clearance === 6;
+                        const displayLvl = isUserSecretAdmin ? 4 : user.clearance;
+
+                        return (
                         <tr 
                           key={user.id} 
                           onClick={() => handleOpenDossier(user)}
@@ -427,8 +441,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                                 <div className="text-[10px] text-gray-600 uppercase">{user.site || 'Z-19'}</div>
                             </td>
                             <td className="p-4 text-center">
-                                <span className={`inline-block px-2 py-1 border text-[10px] font-bold ${user.clearance >= 5 ? 'border-yellow-600 text-yellow-500' : 'border-gray-700 text-gray-400'}`}>
-                                   L-{user.clearance}
+                                <span className={`inline-block px-2 py-1 border text-[10px] font-bold ${displayLvl >= 5 ? 'border-yellow-600 text-yellow-500' : 'border-gray-700 text-gray-400'}`}>
+                                   L-{displayLvl}
                                 </span>
                             </td>
                             <td className="p-4 text-center">
@@ -451,7 +465,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                                 )}
                             </td>
                         </tr>
-                    ))}
+                        );
+                    })}
                 </tbody>
             </table>
         </div>
