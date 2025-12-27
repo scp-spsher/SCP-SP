@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X, ShieldAlert, Crown } from 'lucide-react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X, ShieldAlert, Crown, Copy, Info } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
 import { StoredUser } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -21,21 +21,24 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'error' | 'success'} | null>(null);
   const [usingLocalFallback, setUsingLocalFallback] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [rlsErrorDetected, setRlsErrorDetected] = useState(false);
   
   const hasInitialFetched = useRef(false);
 
-  // Хелпер для определения прав админа (5+ или SuperAdmin)
-  const isAdmin = useMemo(() => {
-    const lvl = Number(effectiveClearance);
-    const realLvl = Number(user.clearance);
-    return lvl >= 5 || realLvl >= 5 || user.isSuperAdmin === true;
+  // ГЛУБОКАЯ ПРОВЕРКА ПРАВ (Deep Authorization)
+  const userPrivileges = useMemo(() => {
+    const currentLevel = Number(effectiveClearance);
+    const accountLevel = Number(user.clearance);
+    const isActuallyAdmin = currentLevel >= 5 || accountLevel >= 5 || user.isSuperAdmin === true;
+    const isActuallyOmni = currentLevel === 6 || accountLevel === 6 || user.isSuperAdmin === true;
+    
+    return {
+      isAdmin: isActuallyAdmin,
+      isOmni: isActuallyOmni,
+      level: Math.max(currentLevel, accountLevel)
+    };
   }, [effectiveClearance, user]);
 
-  const isOmni = useMemo(() => {
-    return Number(effectiveClearance) === 6 || Number(user.clearance) === 6 || user.isSuperAdmin === true;
-  }, [effectiveClearance, user]);
-
-  // Загрузка локальных данных
   const loadLocalReports = useCallback(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -52,11 +55,11 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     return [];
   }, []);
 
-  // Загрузка данных из БД
   const fetchReports = useCallback(async () => {
     if (!user) return;
     setIsLoading(true);
     setStatusMessage(null);
+    setRlsErrorDetected(false);
     
     if (isSupabaseConfigured()) {
       try {
@@ -157,14 +160,14 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   };
 
   const executeDeletion = async (reportId: string) => {
-    console.log("[TERMINAL] Удаление объекта:", reportId);
+    console.log("[TERMINAL] Уничтожение записи:", reportId);
     
     const backupReports = [...reports];
     setReports(prev => prev.filter(r => r.id !== reportId));
     setSelectedReport(null);
     setView('list');
     setIsConfirmingDelete(false);
-    setStatusMessage({ text: 'ИЗЪЯТИЕ ЗАПИСИ...', type: 'success' });
+    setStatusMessage({ text: 'ИНИЦИАЦИЯ УДАЛЕНИЯ...', type: 'success' });
 
     try {
       let dbError = null;
@@ -176,7 +179,14 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         if (error) dbError = error;
       }
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        // Если ошибка 42501 — это RLS. Нужно показать SQL решение.
+        if (dbError.code === '42501') {
+           setRlsErrorDetected(true);
+           throw new Error("ОШИБКА БЕЗОПАСНОСТИ БАЗЫ ДАННЫХ (RLS). УДАЛЕНИЕ ЗАБЛОКИРОВАНО СЕРВЕРОМ.");
+        }
+        throw dbError;
+      }
 
       const localRaw = localStorage.getItem(STORAGE_KEY);
       if (localRaw) {
@@ -185,21 +195,27 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
       }
 
-      setStatusMessage({ text: 'ЗАПИСЬ УДАЛЕНА ИЗ РЕЕСТРА', type: 'success' });
+      setStatusMessage({ text: 'ЗАПИСЬ УСПЕШНО УДАЛЕНА', type: 'success' });
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (e: any) {
       console.error("[TERMINAL] Сбой удаления:", e.message);
       setReports(backupReports);
-      setStatusMessage({ text: `СБОЙ СИСТЕМЫ: ${e.message.toUpperCase()}`, type: 'error' });
+      setStatusMessage({ text: e.message.toUpperCase(), type: 'error' });
     }
+  };
+
+  const copyRlsFix = () => {
+    const sql = `CREATE POLICY "Allow Admins to delete any report" ON public.reports FOR DELETE TO authenticated USING ((SELECT clearance FROM public.personnel WHERE id = auth.uid()) >= 5);`;
+    navigator.clipboard.writeText(sql);
+    alert("SQL-команда скопирована. Выполните её в SQL Editor вашего Supabase проекта.");
   };
 
   // ФИЛЬТРАЦИЯ
   const visibleReports = reports.filter(r => {
     if (!user) return false;
     if (user.id === r.author_id) return true;
-    if (isOmni) return true;
-    if (Number(effectiveClearance) < r.author_clearance) return false;
+    if (userPrivileges.isOmni) return true;
+    if (userPrivileges.level < r.author_clearance) return false;
     
     const query = searchTerm.toLowerCase();
     return r.title.toLowerCase().includes(query) || 
@@ -227,22 +243,39 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     }
   };
 
-  // ПРОВЕРКА ПРАВ НА УДАЛЕНИЕ (Улучшена для хостинга)
+  // ПРОВЕРКА ПРАВ НА УДАЛЕНИЕ (Ультимативная версия)
   const canDelete = useMemo(() => {
     if (!selectedReport) return false;
-    // 1. Автор может удалять всегда
     if (user.id === selectedReport.author_id) return true;
-    // 2. Админ (5 или 6) может удалять всё
-    return isAdmin;
-  }, [selectedReport, user, isAdmin]);
+    return userPrivileges.isAdmin;
+  }, [selectedReport, user, userPrivileges]);
 
   const isAdminOverriding = useMemo(() => {
     if (!selectedReport) return false;
-    return isAdmin && user.id !== selectedReport.author_id;
-  }, [selectedReport, user, isAdmin]);
+    return userPrivileges.isAdmin && user.id !== selectedReport.author_id;
+  }, [selectedReport, user, userPrivileges]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
+      {/* RLS ERROR ALERT */}
+      {rlsErrorDetected && (
+        <div className="bg-red-900/30 border-2 border-red-500 p-6 flex flex-col gap-4 animate-in slide-in-from-top-4">
+           <div className="flex items-center gap-3 text-red-500 font-bold uppercase tracking-widest">
+             <AlertTriangle size={24} /> Критическая ошибка доступа базы данных
+           </div>
+           <p className="text-xs text-gray-300 font-mono leading-relaxed">
+             Приложение разрешает вам удаление (L-{userPrivileges.level}), но ваша база данных на хостинге Supabase заблокировала запрос из-за политик RLS. 
+             Для решения выполните следующую SQL-команду в панели управления Supabase:
+           </p>
+           <div className="bg-black p-4 border border-gray-700 font-mono text-[10px] text-scp-terminal relative group">
+              <code>CREATE POLICY "Admins Delete All" ON reports FOR DELETE USING ((SELECT clearance FROM personnel WHERE id = auth.uid()) &gt;= 5);</code>
+              <button onClick={copyRlsFix} className="absolute right-2 top-2 p-2 bg-gray-800 hover:bg-white hover:text-black transition-colors rounded">
+                 <Copy size={14} />
+              </button>
+           </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4">
         <div>
           <h2 className="text-2xl font-bold tracking-widest text-scp-text flex items-center gap-3 uppercase">
@@ -304,7 +337,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center gap-4 py-32">
                   <RefreshCw className="animate-spin text-scp-terminal" size={32} />
-                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">Синхронизация...</span>
+                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">Синхронизация реестра...</span>
                 </div>
               ) : visibleReports.length > 0 ? (
                 <table className="w-full text-left border-collapse">
@@ -456,8 +489,8 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
             <div className="pt-8 border-t border-gray-800">
               {isAdminOverriding && (
                 <div className="mb-4 flex items-center gap-2 text-yellow-500 bg-yellow-950/20 border border-yellow-900/50 p-3 text-[10px] font-bold uppercase tracking-widest animate-pulse">
-                  {isOmni ? <Crown size={14} /> : <ShieldAlert size={14} />}
-                  ВНИМАНИЕ: ПРИВИЛЕГИИ АДМИНИСТРАТОРА ({isOmni ? 'OMNI ACCESS' : 'COUNCIL O5'})
+                  {userPrivileges.isOmni ? <Crown size={14} /> : <ShieldAlert size={14} />}
+                  ВНИМАНИЕ: АДМИНИСТРАТИВНЫЙ ДОСТУП ({userPrivileges.isOmni ? 'OMNI' : 'COUNCIL O5'})
                 </div>
               )}
               
