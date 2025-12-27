@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Trash2, RefreshCw, Lock, CheckCircle2, X, ShieldAlert, Crown, Image as ImageIcon, Camera } from 'lucide-react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Trash2, RefreshCw, Lock, CheckCircle2, X, ShieldAlert, Crown, Image as ImageIcon, Camera, User } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
 import { StoredUser } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -10,9 +10,10 @@ const SECRET_ADMIN_ID = '36046d5d-dde4-4cf6-a2de-794334b7af5c';
 interface ReportsProps {
   user: StoredUser;
   effectiveClearance: number; 
+  onViewProfile?: (userId: string) => void;
 }
 
-const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
+const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance, onViewProfile }) => {
   const [reports, setReports] = useState<SCPReport[]>([]);
   const [view, setView] = useState<'list' | 'create' | 'detail'>('list');
   const [selectedReport, setSelectedReport] = useState<SCPReport | null>(null);
@@ -204,7 +205,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     if (userPrivileges.isOmni) return true;
     if (userPrivileges.level < r.author_clearance) return false;
     const query = searchTerm.toLowerCase();
-    return r.title.toLowerCase().includes(query) || r.id.toLowerCase().includes(query);
+    return r.title.toLowerCase().includes(query) || r.id.toLowerCase().includes(query) || (r.author_name && r.author_name.toLowerCase().includes(query));
   });
 
   const getSeverityColor = (sev: string) => {
@@ -272,7 +273,8 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                     <tr className="text-[10px] uppercase text-gray-500 border-b border-gray-800 bg-black/50">
                       <th className="p-4 pl-6">ID / Тип</th>
                       <th className="p-4">Заголовок</th>
-                      <th className="p-4 text-center">Допуск</th>
+                      <th className="p-4">Автор</th>
+                      <th className="p-4 text-center">Уровень</th>
                       <th className="p-4 text-center">Угроза</th>
                     </tr>
                   </thead>
@@ -280,14 +282,23 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                     {visibleReports.length > 0 ? visibleReports.map((report) => {
                       const authorLvl = (report.author_id === SECRET_ADMIN_ID && report.author_clearance === 6) ? 4 : report.author_clearance;
                       return (
-                        <tr key={report.id} onClick={() => { setSelectedReport(report); setView('detail'); }} className="hover:bg-gray-900/50 transition-colors cursor-pointer group">
-                          <td className="p-4 pl-6">
+                        <tr key={report.id} className="hover:bg-gray-900/50 transition-colors group cursor-default">
+                          <td className="p-4 pl-6 cursor-pointer" onClick={() => { setSelectedReport(report); setView('detail'); }}>
                             <div className="text-xs font-bold text-gray-400 group-hover:text-scp-terminal">#{report.id}</div>
                             <div className="text-[9px] uppercase tracking-tighter text-blue-500">{report.type}</div>
                           </td>
-                          <td className="p-4">
+                          <td className="p-4 cursor-pointer" onClick={() => { setSelectedReport(report); setView('detail'); }}>
                              <div className="font-bold">{report.title}</div>
                              <div className="text-[10px] text-gray-600 truncate max-w-[200px]">{report.target_id ? `ОБЪЕКТ: ${report.target_id}` : 'ОБЪЕКТ НЕ УКАЗАН'}</div>
+                          </td>
+                          <td className="p-4">
+                              <button 
+                                onClick={() => onViewProfile && onViewProfile(report.author_id)}
+                                className="flex items-center gap-2 hover:text-scp-terminal transition-colors"
+                              >
+                                 <User size={12} className="text-gray-600" />
+                                 <span className="underline decoration-dotted decoration-gray-700 hover:decoration-scp-terminal">{report.author_name || 'Неизвестен'}</span>
+                              </button>
                           </td>
                           <td className="p-4 text-center">L-{authorLvl}</td>
                           <td className="p-4 text-center">
@@ -299,7 +310,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                       );
                     }) : (
                       <tr>
-                        <td colSpan={4} className="p-12 text-center text-gray-600 italic">ЗАПИСЕЙ НЕ ОБНАРУЖЕНО</td>
+                        <td colSpan={5} className="p-12 text-center text-gray-600 italic">ЗАПИСЕЙ НЕ ОБНАРУЖЕНО</td>
                       </tr>
                     )}
                   </tbody>
@@ -383,7 +394,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         {view === 'detail' && selectedReport && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
             <div className="flex justify-between items-start border-b border-gray-800 pb-4">
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <div className="flex items-center gap-2">
                   <span className={`text-[9px] font-bold px-2 py-0.5 border ${getSeverityColor(selectedReport.severity)}`}>
                     {selectedReport.severity}
@@ -391,9 +402,11 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                   <span className="text-[10px] text-blue-500 font-mono font-bold">{selectedReport.type}</span>
                 </div>
                 <h1 className="text-3xl font-black text-white uppercase leading-tight">{selectedReport.title}</h1>
-                <p className="text-[10px] text-gray-500 font-mono">
-                  ID: {selectedReport.id} // АВТОР: {selectedReport.author_name} // {selectedReport.target_id ? `ОБЪЕКТ: ${selectedReport.target_id}` : 'ОБЪЕКТ НЕ УКАЗАН'}
-                </p>
+                <div className="text-[10px] text-gray-500 font-mono flex flex-wrap gap-x-4">
+                  <span>ID: {selectedReport.id}</span>
+                  <button onClick={() => onViewProfile && onViewProfile(selectedReport.author_id)} className="hover:text-scp-terminal underline decoration-dotted">АВТОР: {selectedReport.author_name}</button>
+                  <span>{selectedReport.target_id ? `ОБЪЕКТ: ${selectedReport.target_id}` : 'ОБЪЕКТ НЕ УКАЗАН'}</span>
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-2xl font-black text-scp-accent border-2 border-scp-accent px-4 py-1">
