@@ -85,7 +85,7 @@ const App: React.FC = () => {
       case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
       case 'reports': return <Reports user={currentUser} effectiveClearance={simulatedClearance} />;
-      case 'admin': return <AdminPanel currentUser={currentUser} />;
+      case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} />;
       case 'guide': return <Guide />;
       default: return <Dashboard currentClearance={simulatedClearance} />;
     }
