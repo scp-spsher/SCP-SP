@@ -1,3 +1,4 @@
+
 export const SecurityClearance = {
   LEVEL_1: 1,
   LEVEL_2: 2,
@@ -36,6 +37,23 @@ export interface SCPFile {
   image?: string; // URL
   isRedacted: boolean;
   lastUpdated: string;
+}
+
+export type ReportType = 'INCIDENT' | 'OBSERVATION' | 'AUDIT' | 'REQUEST' | 'SECURITY';
+
+export interface SCPReport {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_clearance: number;
+  type: ReportType;
+  title: string;
+  content: string;
+  target_id?: string; // e.g. SCP-173
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  created_at: string;
+  is_archived: boolean;
+  image_url?: string;
 }
 
 export interface ChatMessage {
