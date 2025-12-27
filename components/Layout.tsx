@@ -127,7 +127,9 @@ const Layout: React.FC<LayoutProps> = ({
                      <item.icon size={18} className="mr-3" />
                      {item.label}
                      {hasUnread && (
-                        <span className="absolute right-4 w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)]"></span>
+                        <span className="absolute right-4 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-[10px] text-white font-bold animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)] border border-black/20">
+                          {unreadMessages > 9 ? '9+' : unreadMessages}
+                        </span>
                      )}
                    </button>
                   ) : (
@@ -168,10 +170,10 @@ const Layout: React.FC<LayoutProps> = ({
             {isO5View ? <Eye size={24} className="mr-2 text-yellow-500" /> : <div className="w-6 h-6 mr-2 text-scp-text"><SCPLogo className="w-full h-full" /></div>}
             <span className={`font-bold tracking-widest ${isO5View ? 'text-yellow-500' : ''}`}>SCPNET</span>
           </div>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="relative">
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="relative p-2">
             <Menu size={24} />
-            {unreadMessages > 0 && currentPage !== 'messages' && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-black"></span>
+            {unreadMessages > 0 && (
+              <span className="absolute top-1 right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-black"></span>
             )}
           </button>
         </header>
@@ -192,7 +194,9 @@ const Layout: React.FC<LayoutProps> = ({
                       <item.icon size={18} className="mr-3" />
                       {item.label}
                       {hasUnread && (
-                        <span className="ml-2 px-1.5 bg-red-600 text-[10px] text-white rounded-full">NEW</span>
+                        <span className="ml-auto px-2 py-0.5 bg-red-600 text-white text-[10px] rounded-full font-bold">
+                          {unreadMessages}
+                        </span>
                       )}
                     </button>
                   ) : null}
