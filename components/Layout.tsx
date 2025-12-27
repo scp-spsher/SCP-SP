@@ -65,7 +65,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'terminal', label: 'ТЕРМИНАЛ', icon: Terminal, minClearance: 4 },
     { id: 'admin', label: 'ПЕРСОНАЛ', icon: Users, minClearance: 5 },
     { id: 'messages', label: 'СВЯЗЬ С АДМИНИСТРАЦИЕЙ', icon: Mail, minClearance: 0, showBadge: true },
-    { id: 'guide', label: 'РУКОВОДСТВО', icon: BookOpen, minClearance: 0 },
+    { id: 'guide', label: 'ДОКУМЕНТАЦИЯ', icon: BookOpen, minClearance: 0 },
   ];
 
   const borderColor = isO5View ? 'border-yellow-900/50' : 'border-gray-800';
