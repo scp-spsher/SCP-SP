@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Trash2, RefreshCw, Lock, CheckCircle2, X, ShieldAlert, Crown } from 'lucide-react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Trash2, RefreshCw, Lock, CheckCircle2, X, ShieldAlert, Crown, Image as ImageIcon, Camera } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
 import { StoredUser } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -22,6 +22,11 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'error' | 'success'} | null>(null);
   const [usingLocalFallback, setUsingLocalFallback] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  
+  // Image handling
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const hasInitialFetched = useRef(false);
 
@@ -82,12 +87,44 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     }
   }, [fetchReports, user]);
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadReportImage = async (file: File): Promise<string | null> => {
+    if (!isSupabaseConfigured()) return null;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `report-${Math.random().toString(36).substr(2, 9)}-${Date.now()}.${fileExt}`;
+      const { error } = await supabase!.storage.from('avatars').upload(`reports/${fileName}`, file);
+      if (error) throw error;
+      const { data } = supabase!.storage.from('avatars').getPublicUrl(`reports/${fileName}`);
+      return data.publicUrl;
+    } catch (e) {
+      console.error("Image upload failed:", e);
+      return null;
+    }
+  };
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setIsSubmitting(true);
     const target = e.target as any;
     
+    let imageUrl = '';
+    if (selectedImage) {
+      imageUrl = await uploadReportImage(selectedImage) || '';
+    }
+
     const newReport: SCPReport = {
       id: `REP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
       author_id: user.id,
@@ -97,6 +134,8 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
       severity: target.severity.value,
       title: target.title.value,
       content: target.content.value,
+      target_id: target.target_id.value || undefined,
+      image_url: imageUrl || undefined,
       created_at: new Date().toISOString(),
       is_archived: false
     };
@@ -109,7 +148,11 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
       const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
       localStorage.setItem(STORAGE_KEY, JSON.stringify([newReport, ...local]));
       setReports(prev => [newReport, ...prev]);
-      setStatusMessage({ text: 'РАПОРТ ОТПРАВЛЕН', type: 'success' });
+      setStatusMessage({ text: 'РАПОРТ ОТПРАВЛЕН В АРХИВ', type: 'success' });
+      
+      // Reset state
+      setSelectedImage(null);
+      setImagePreview(null);
       setTimeout(() => setView('list'), 1000);
     } catch (err: any) {
       setStatusMessage({ text: err.message, type: 'error' });
@@ -149,6 +192,15 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     return r.title.toLowerCase().includes(query) || r.id.toLowerCase().includes(query);
   });
 
+  const getSeverityColor = (sev: string) => {
+    switch (sev) {
+      case 'CRITICAL': return 'text-red-500 border-red-500 bg-red-950/20';
+      case 'HIGH': return 'text-orange-500 border-orange-500 bg-orange-950/20';
+      case 'MEDIUM': return 'text-yellow-500 border-yellow-500 bg-yellow-950/20';
+      default: return 'text-blue-400 border-blue-400 bg-blue-950/20';
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4">
@@ -165,9 +217,9 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         </div>
         <div className="flex gap-2">
           {view !== 'list' && (
-            <button onClick={() => setView('list')} className="px-4 py-2 border border-gray-700 text-gray-400 hover:text-white transition-colors text-xs font-bold uppercase">К списку</button>
+            <button onClick={() => { setView('list'); setStatusMessage(null); }} className="px-4 py-2 border border-gray-700 text-gray-400 hover:text-white transition-colors text-xs font-bold uppercase">К списку</button>
           )}
-          <button onClick={() => setView('create')} className="flex items-center gap-2 px-4 py-2 bg-scp-accent text-white hover:bg-red-700 transition-colors text-xs font-bold uppercase">
+          <button onClick={() => { setView('create'); setStatusMessage(null); }} className="flex items-center gap-2 px-4 py-2 bg-scp-accent text-white hover:bg-red-700 transition-colors text-xs font-bold uppercase">
             <Plus size={16} /> Новый рапорт
           </button>
         </div>
@@ -210,16 +262,28 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                     </tr>
                   </thead>
                   <tbody className="text-sm font-mono text-gray-300 divide-y divide-gray-900">
-                    {visibleReports.map((report) => (
-                      <tr key={report.id} onClick={() => { setSelectedReport(report); setView('detail'); }} className="hover:bg-gray-900/50 transition-colors cursor-pointer">
+                    {visibleReports.length > 0 ? visibleReports.map((report) => (
+                      <tr key={report.id} onClick={() => { setSelectedReport(report); setView('detail'); }} className="hover:bg-gray-900/50 transition-colors cursor-pointer group">
                         <td className="p-4 pl-6">
-                          <div className="text-xs font-bold text-gray-400">#{report.id}</div>
+                          <div className="text-xs font-bold text-gray-400 group-hover:text-scp-terminal">#{report.id}</div>
+                          <div className="text-[9px] uppercase tracking-tighter text-blue-500">{report.type}</div>
                         </td>
-                        <td className="p-4">{report.title}</td>
+                        <td className="p-4">
+                           <div className="font-bold">{report.title}</div>
+                           <div className="text-[10px] text-gray-600 truncate max-w-[200px]">{report.target_id ? `ОБЪЕКТ: ${report.target_id}` : 'ОБЪЕКТ НЕ УКАЗАН'}</div>
+                        </td>
                         <td className="p-4 text-center">L-{report.author_clearance}</td>
-                        <td className="p-4 text-center">{report.severity}</td>
+                        <td className="p-4 text-center">
+                           <span className={`text-[9px] px-2 py-0.5 border font-bold uppercase ${getSeverityColor(report.severity)}`}>
+                             {report.severity}
+                           </span>
+                        </td>
                       </tr>
-                    ))}
+                    )) : (
+                      <tr>
+                        <td colSpan={4} className="p-12 text-center text-gray-600 italic">ЗАПИСЕЙ НЕ ОБНАРУЖЕНО</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               )}
@@ -231,21 +295,68 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
           <div className="p-8 max-w-3xl mx-auto w-full">
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <select name="type" className="bg-black border border-gray-700 p-3 text-xs text-scp-terminal font-mono">
-                  <option value="INCIDENT">НАРУШЕНИЕ</option>
-                  <option value="OBSERVATION">НАБЛЮДЕНИЕ</option>
-                </select>
-                <select name="severity" className="bg-black border border-gray-700 p-3 text-xs text-scp-terminal font-mono">
-                  <option value="LOW">LOW</option>
-                  <option value="MEDIUM">MEDIUM</option>
-                  <option value="HIGH">HIGH</option>
-                  <option value="CRITICAL">CRITICAL</option>
-                </select>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Категория</label>
+                  <select name="type" className="w-full bg-black border border-gray-700 p-3 text-xs text-scp-terminal font-mono focus:outline-none focus:border-scp-terminal">
+                    <option value="INCIDENT">НАРУШЕНИЕ УСЛОВИЙ</option>
+                    <option value="OBSERVATION">НАБЛЮДЕНИЕ</option>
+                    <option value="AUDIT">АУДИТ</option>
+                    <option value="SECURITY">БЕЗОПАСНОСТЬ</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Уровень угрозы</label>
+                  <select name="severity" className="w-full bg-black border border-gray-700 p-3 text-xs text-scp-terminal font-mono focus:outline-none focus:border-scp-terminal">
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                  </select>
+                </div>
               </div>
-              <input name="title" required placeholder="ЗАГОЛОВОК..." className="w-full bg-black border border-gray-700 p-3 text-sm text-scp-terminal font-mono" />
-              <textarea name="content" required rows={6} placeholder="ДЕТАЛИ..." className="w-full bg-black border border-gray-700 p-3 text-sm text-scp-terminal font-mono" />
-              <button type="submit" disabled={isSubmitting} className="w-full bg-scp-accent py-4 text-white font-bold uppercase text-xs">
-                {isSubmitting ? 'ОТПРАВКА...' : 'ОТПРАВИТЬ'}
+              
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Заголовок</label>
+                <input name="title" required placeholder="ЗАГОЛОВОК РАПОРТА..." className="w-full bg-black border border-gray-700 p-3 text-sm text-scp-terminal font-mono focus:outline-none focus:border-scp-terminal" />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Объект (ОПЦИОНАЛЬНО)</label>
+                <input name="target_id" placeholder="SCP-####" className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-400 font-mono focus:outline-none focus:border-scp-terminal" />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Детали рапорта</label>
+                <textarea name="content" required rows={6} placeholder="ПОДРОБНОЕ ОПИСАНИЕ ИНЦИДЕНТА/НАБЛЮДЕНИЯ..." className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-300 font-mono focus:outline-none focus:border-scp-terminal" />
+              </div>
+
+              <div className="pt-2">
+                <input type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" className="hidden" />
+                {!imagePreview ? (
+                  <button 
+                    type="button" 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2 text-[10px] font-bold text-gray-500 hover:text-white border border-dashed border-gray-700 p-4 w-full transition-all"
+                  >
+                    <ImageIcon size={16} /> ПРИКРЕПИТЬ ВИЗУАЛЬНЫЕ ДОКАЗАТЕЛЬСТВА (ФОТО)
+                  </button>
+                ) : (
+                  <div className="relative border border-gray-700 p-2 bg-black">
+                    <img src={imagePreview} className="max-h-48 mx-auto grayscale hover:grayscale-0 transition-all" />
+                    <button 
+                      type="button" 
+                      onClick={() => { setSelectedImage(null); setImagePreview(null); }}
+                      className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full"
+                    >
+                      <X size={12} />
+                    </button>
+                    <div className="text-[9px] text-center text-gray-600 mt-2 font-mono uppercase tracking-widest">ПРЕДПРОСМОТР ВЛОЖЕНИЯ</div>
+                  </div>
+                )}
+              </div>
+
+              <button type="submit" disabled={isSubmitting} className="w-full bg-scp-accent hover:bg-red-700 py-4 text-white font-bold uppercase text-xs tracking-widest transition-all">
+                {isSubmitting ? 'ПЕРЕДАЧА ДАННЫХ...' : 'ОТПРАВИТЬ РАПОРТ В КОМИТЕТ'}
               </button>
             </form>
           </div>
@@ -254,31 +365,61 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         {view === 'detail' && selectedReport && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
             <div className="flex justify-between items-start border-b border-gray-800 pb-4">
-              <div>
-                <h1 className="text-2xl font-black text-white uppercase">{selectedReport.title}</h1>
-                <p className="text-[10px] text-gray-500 font-mono">ID: {selectedReport.id} // АВТОР: {selectedReport.author_name}</p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[9px] font-bold px-2 py-0.5 border ${getSeverityColor(selectedReport.severity)}`}>
+                    {selectedReport.severity}
+                  </span>
+                  <span className="text-[10px] text-blue-500 font-mono font-bold">{selectedReport.type}</span>
+                </div>
+                <h1 className="text-3xl font-black text-white uppercase leading-tight">{selectedReport.title}</h1>
+                <p className="text-[10px] text-gray-500 font-mono">
+                  ID: {selectedReport.id} // АВТОР: {selectedReport.author_name} // {selectedReport.target_id ? `ОБЪЕКТ: ${selectedReport.target_id}` : 'ОБЪЕКТ НЕ УКАЗАН'}
+                </p>
               </div>
               <div className="text-right">
-                <div className="text-xl font-bold text-scp-accent">
+                <div className="text-2xl font-black text-scp-accent border-2 border-scp-accent px-4 py-1">
                    L-{selectedReport.author_id === SECRET_ADMIN_ID && userPrivileges.isOmni ? userPrivileges.displayLevel : selectedReport.author_clearance}
                 </div>
               </div>
             </div>
-            <div className="bg-black/50 p-6 border border-gray-800 font-mono text-sm text-gray-300 whitespace-pre-wrap">{selectedReport.content}</div>
+
+            <div className="bg-black/50 p-6 border border-gray-800 font-mono text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+              {selectedReport.content}
+            </div>
+
+            {selectedReport.image_url && (
+              <div className="space-y-2">
+                <div className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                   <ImageIcon size={12} /> Визуальное доказательство #01
+                </div>
+                <div className="p-2 border border-gray-800 bg-black inline-block relative group">
+                  <img src={selectedReport.image_url} alt="Evidence" className="max-h-[400px] grayscale hover:grayscale-0 transition-all cursor-crosshair" />
+                  <div className="absolute inset-0 border-2 border-scp-accent/20 pointer-events-none"></div>
+                  <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] px-1 font-bold">CONFIDENTIAL</div>
+                </div>
+              </div>
+            )}
+
             <div className="pt-6 border-t border-gray-800 flex justify-between items-center">
               {((user.id === selectedReport.author_id) || userPrivileges.isAdmin) ? (
                 <div className="flex gap-4 items-center">
                   {!isConfirmingDelete ? (
-                    <button onClick={() => setIsConfirmingDelete(true)} className="text-red-500 text-[10px] font-bold uppercase flex items-center gap-2"><Trash2 size={14}/> Удалить</button>
+                    <button onClick={() => setIsConfirmingDelete(true)} className="text-red-500 text-[10px] font-bold uppercase flex items-center gap-2 hover:bg-red-950/20 p-2 transition-all border border-transparent hover:border-red-900">
+                      <Trash2 size={14}/> Удалить запись
+                    </button>
                   ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => executeDeletion(selectedReport.id)} className="bg-red-600 text-white px-3 py-1 text-[10px] font-bold">ДА</button>
-                      <button onClick={() => setIsConfirmingDelete(false)} className="text-gray-500 text-[10px] font-bold">НЕТ</button>
+                    <div className="flex gap-2 items-center bg-red-950/20 p-2 border border-red-900 animate-in slide-in-from-left-2">
+                      <span className="text-[10px] text-red-500 font-bold mr-2">ПОДТВЕРЖДАЕТЕ?</span>
+                      <button onClick={() => executeDeletion(selectedReport.id)} className="bg-red-600 text-white px-3 py-1 text-[10px] font-bold">УНИЧТОЖИТЬ</button>
+                      <button onClick={() => setIsConfirmingDelete(false)} className="text-gray-500 text-[10px] font-bold hover:text-white">ОТМЕНА</button>
                     </div>
                   )}
                 </div>
-              ) : <div className="text-[9px] text-gray-600 italic uppercase"><Lock size={12}/> Заблокировано</div>}
-              <div className="text-[9px] text-gray-700 font-mono">DATE: {new Date(selectedReport.created_at).toLocaleString()}</div>
+              ) : <div className="text-[9px] text-gray-600 italic uppercase flex items-center gap-2"><Lock size={12}/> Заблокировано для редактирования</div>}
+              <div className="text-[9px] text-gray-700 font-mono uppercase tracking-widest">
+                РЕГИСТРАЦИЯ: {new Date(selectedReport.created_at).toLocaleString()}
+              </div>
             </div>
           </div>
         )}
