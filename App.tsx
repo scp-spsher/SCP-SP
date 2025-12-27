@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { SecurityClearance } from './types';
 import Login from './components/Login';
 import Layout from './components/Layout';
@@ -24,44 +25,58 @@ const App: React.FC = () => {
   const [simulatedClearance, setSimulatedClearance] = useState<number>(0);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    const initApp = async () => {
-      let user = currentUser;
-      if (!user) {
-        user = await authService.tryRecoverSession();
-      }
-      if (user) {
-        const freshUser = await authService.refreshSession();
-        if (!freshUser) {
-           authService.logout();
-           setCurrentUser(null);
-        } else {
-           setCurrentUser(freshUser);
-        }
-      } else {
-        setCurrentUser(null);
-      }
-      setIsLoadingSession(false);
-    };
-    initApp();
+  const handleLogout = useCallback(() => {
+    authService.logout();
+    setCurrentUser(null);
+    setViewedUser(null);
+    setCurrentPage('dashboard');
+    setSimulatedClearance(0);
   }, []);
 
   useEffect(() => {
+    const initApp = async () => {
+      setIsLoadingSession(true);
+      
+      let user = authService.getSession();
+      if (!user) {
+        user = await authService.tryRecoverSession();
+      }
+
+      if (user) {
+        const freshUser = await authService.refreshSession();
+        
+        if (!freshUser) {
+          handleLogout();
+        } else {
+          setCurrentUser(freshUser);
+          setSimulatedClearance(freshUser.isSuperAdmin ? 6 : Number(freshUser.clearance || 0));
+        }
+      }
+      
+      setIsLoadingSession(false);
+    };
+    
+    initApp();
+  }, [handleLogout]);
+
+  useEffect(() => {
     if (currentUser && isSupabaseConfigured()) {
-       setSimulatedClearance(currentUser.isSuperAdmin ? 6 : currentUser.clearance);
+       setSimulatedClearance(currentUser.isSuperAdmin ? 6 : Number(currentUser.clearance || 0));
        
-       // Глобальный слушатель новых сообщений для бейджа уведомлений
        const channel = supabase!
          .channel('notifications')
          .on('postgres_changes', 
            { event: 'INSERT', schema: 'public', table: 'messages' }, 
            (payload) => {
              const newMsg = payload.new;
-             // Уведомляем админа, если сообщение в пул, или сотрудника, если сообщение ему
-             const isForMe = newMsg.receiver_id === currentUser.id;
-             const isForAdminPool = (currentUser.clearance >= 5 && newMsg.receiver_id === ADMIN_POOL_ID);
+             const myId = String(currentUser.id).toLowerCase();
+             const recId = String(newMsg.receiver_id).toLowerCase();
+             const senId = String(newMsg.sender_id).toLowerCase();
              
-             if ((isForMe || isForAdminPool) && newMsg.sender_id !== currentUser.id && currentPage !== 'messages') {
+             const isForMe = recId === myId;
+             const isForAdminPool = (Number(currentUser.clearance) >= 5 && recId === ADMIN_POOL_ID.toLowerCase());
+             
+             if ((isForMe || isForAdminPool) && senId !== myId && currentPage !== 'messages') {
                setUnreadCount(prev => prev + 1);
              }
            }
@@ -74,15 +89,8 @@ const App: React.FC = () => {
 
   const handleLogin = (user: StoredUser) => {
     setCurrentUser(user);
+    setSimulatedClearance(user.isSuperAdmin ? 6 : Number(user.clearance || 0));
     setCurrentPage('dashboard');
-  };
-
-  const handleLogout = () => {
-    authService.logout();
-    setCurrentUser(null);
-    setViewedUser(null);
-    setCurrentPage('dashboard');
-    setSimulatedClearance(0);
   };
 
   const handleProfileUpdate = (updatedUser: StoredUser) => {
@@ -90,6 +98,7 @@ const App: React.FC = () => {
   };
 
   const handleViewProfile = async (userId: string) => {
+      if (!userId) return;
       if (currentUser && userId === currentUser.id) {
           setViewedUser(null);
           setCurrentPage('profile');
@@ -100,12 +109,14 @@ const App: React.FC = () => {
       if (user) {
           setViewedUser(user);
           setCurrentPage('profile');
+      } else {
+          alert("ОШИБКА: ОБЪЕКТ УДАЛЕН ИЗ РЕЕСТРА");
       }
   };
 
   const handleNavigate = (page: string) => {
       if (page === 'profile') setViewedUser(null);
-      if (page === 'messages') setUnreadCount(0); // Сброс при входе
+      if (page === 'messages') setUnreadCount(0);
       setCurrentPage(page);
   };
 
@@ -113,8 +124,8 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center font-mono">
         <div className="w-16 h-16 border-4 border-scp-terminal border-t-transparent rounded-full animate-spin mb-4"></div>
-        <div className="text-scp-terminal text-sm tracking-widest animate-pulse">
-          ВОССТАНОВЛЕНИЕ ТЕРМИНАЛЬНОЙ СЕССИИ...
+        <div className="text-scp-terminal text-sm tracking-[0.3em] animate-pulse uppercase">
+          ПРОВЕРКА СТАТУСА В БАЗЕ ДАННЫХ...
         </div>
       </div>
     );
@@ -125,12 +136,13 @@ const App: React.FC = () => {
   }
 
   const renderContent = () => {
+    const safeClearance = Number(simulatedClearance || 0);
     switch (currentPage) {
-      case 'dashboard': return <Dashboard currentClearance={simulatedClearance} />;
+      case 'dashboard': return <Dashboard currentClearance={safeClearance} />;
       case 'profile': return (
         <Profile 
           user={viewedUser || currentUser} 
-          currentClearance={viewedUser ? viewedUser.clearance : simulatedClearance} 
+          currentClearance={viewedUser ? Number(viewedUser.clearance) : safeClearance} 
           onProfileUpdate={viewedUser ? undefined : handleProfileUpdate} 
           onBack={viewedUser ? () => setViewedUser(null) : undefined}
           isViewingSelf={!viewedUser}
@@ -140,10 +152,10 @@ const App: React.FC = () => {
       case 'database': return <Database />;
       case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
-      case 'reports': return <Reports user={currentUser} effectiveClearance={simulatedClearance} onViewProfile={handleViewProfile} />;
+      case 'reports': return <Reports user={currentUser} effectiveClearance={safeClearance} onViewProfile={handleViewProfile} />;
       case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} onViewProfile={handleViewProfile} />;
       case 'guide': return <Guide />;
-      default: return <Dashboard currentClearance={simulatedClearance} />;
+      default: return <Dashboard currentClearance={safeClearance} />;
     }
   };
 
@@ -152,11 +164,11 @@ const App: React.FC = () => {
       currentPage={currentPage} 
       onNavigate={handleNavigate} 
       onLogout={handleLogout}
-      userClearance={currentUser.clearance} 
-      simulatedClearance={simulatedClearance} 
+      userClearance={Number(currentUser.clearance)} 
+      simulatedClearance={Number(simulatedClearance)} 
       setSimulatedClearance={setSimulatedClearance}
-      userEmail={currentUser.id}
-      realEmail={currentUser.email}
+      userEmail={String(currentUser.id)}
+      realEmail={String(currentUser.email || '')}
       isSuperAdmin={currentUser.isSuperAdmin}
       user={currentUser}
       unreadMessages={unreadCount}
