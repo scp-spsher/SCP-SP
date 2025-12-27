@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X, ShieldAlert } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
 import { StoredUser } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -146,15 +146,15 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   };
 
   const executeDeletion = async (reportId: string) => {
-    console.log("[TERMINAL] Удаление объекта:", reportId);
+    console.log("[TERMINAL] Инициация удаления объекта:", reportId);
     
-    // Мгновенно обновляем интерфейс для скорости
+    // Мгновенно обновляем интерфейс
     const backupReports = [...reports];
     setReports(prev => prev.filter(r => r.id !== reportId));
     setSelectedReport(null);
     setView('list');
     setIsConfirmingDelete(false);
-    setStatusMessage({ text: 'УДАЛЕНИЕ ИЗ БАЗЫ ДАННЫХ...', type: 'success' });
+    setStatusMessage({ text: 'ЗАПРОС НА УДАЛЕНИЕ ПЕРЕДАН...', type: 'success' });
 
     try {
       let dbError = null;
@@ -170,9 +170,8 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
       }
 
       if (dbError) {
-        // Если ошибка в правах (RLS)
         if (dbError.code === '42501') {
-          throw new Error("ОТКАЗАНО В ДОСТУПЕ. НЕДОСТАТОЧНО ПРАВ НА УДАЛЕНИЕ В БД.");
+          throw new Error("БЛОКИРОВКА БД: НЕДОСТАТОЧНО ПРАВ (ПРОВЕРЬТЕ RLS).");
         }
         throw dbError;
       }
@@ -185,14 +184,13 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
       }
 
-      setStatusMessage({ text: 'ОБЪЕКТ УДАЛЕН ИЗ ЦЕНТРАЛЬНОГО РЕЕСТРА', type: 'success' });
+      setStatusMessage({ text: 'ЗАПИСЬ УСПЕШНО УДАЛЕНА ИЗ ВСЕХ РЕЕСТРОВ', type: 'success' });
       setTimeout(() => setStatusMessage(null), 3000);
 
     } catch (e: any) {
       console.error("[TERMINAL] Сбой удаления:", e.message);
-      // Возвращаем данные, если удаление не удалось
       setReports(backupReports);
-      setStatusMessage({ text: `СБОЙ: ${e.message.toUpperCase()}`, type: 'error' });
+      setStatusMessage({ text: `ОШИБКА: ${e.message.toUpperCase()}`, type: 'error' });
     }
   };
 
@@ -200,13 +198,13 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   const visibleReports = reports.filter(r => {
     if (!user) return false;
     
-    // 1. Автор всегда видит свой отчет
+    // Автор всегда видит свой отчет
     if (user.id === r.author_id) return true;
     
-    // 2. Если текущий уровень (в т.ч. симуляция) ниже уровня рапорта - скрываем
-    if (effectiveClearance < r.author_clearance) return false;
+    // Если текущий уровень (в т.ч. симуляция) ниже уровня рапорта - скрываем
+    // ИСКЛЮЧЕНИЕ: Уровень 6 (OMNI) видит вообще всё.
+    if (effectiveClearance < 6 && effectiveClearance < r.author_clearance) return false;
     
-    // 3. Поиск
     const query = searchTerm.toLowerCase();
     return r.title.toLowerCase().includes(query) || 
            r.id.toLowerCase().includes(query) ||
@@ -233,6 +231,9 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     }
   };
 
+  const canDelete = selectedReport && (effectiveClearance >= 5 || user.id === selectedReport.author_id);
+  const isAdminOverriding = selectedReport && effectiveClearance >= 5 && user.id !== selectedReport.author_id;
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4">
@@ -243,7 +244,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
           <div className="flex items-center gap-2 mt-1">
             <Shield size={12} className="text-scp-terminal" />
             <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-              ОПЕРАТОР: {user.name} // ТЕКУЩИЙ ДОСТУП: L-{effectiveClearance} // {usingLocalFallback ? 'OFFLINE' : 'ONLINE'}
+              ОПЕРАТОР: {user.name} // ДОСТУП: L-{effectiveClearance} // {usingLocalFallback ? 'OFFLINE' : 'ONLINE'}
             </p>
           </div>
         </div>
@@ -305,7 +306,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                       <th className="p-4 pl-6">ID / Тип</th>
                       <th className="p-4">Заголовок</th>
                       <th className="p-4 text-center">Допуск</th>
-                      <th className="p-4 text-center">Severity</th>
+                      <th className="p-4 text-center">Угроза</th>
                     </tr>
                   </thead>
                   <tbody className="text-sm font-mono text-gray-300 divide-y divide-gray-900">
@@ -339,7 +340,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                 <div className="flex flex-col items-center justify-center py-32 text-gray-700">
                   <Lock size={64} className="mb-4 opacity-20" />
                   <p className="tracking-[0.3em] text-xs uppercase font-bold">Рапортов не найдено</p>
-                  <p className="text-[9px] mt-2 opacity-50 uppercase tracking-widest text-center">Убедитесь, что ваш уровень допуска достаточен<br/>для просмотра скрытых записей</p>
+                  <p className="text-[9px] mt-2 opacity-50 uppercase tracking-widest text-center">Ваш уровень допуска: L-{effectiveClearance}</p>
                   <button onClick={fetchReports} className="mt-6 text-[10px] border border-gray-800 px-4 py-2 hover:bg-gray-800 uppercase font-bold transition-all">Обновить реестр</button>
                 </div>
               )}
@@ -444,9 +445,15 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               {selectedReport.content}
             </div>
 
-            {/* ПАНЕЛЬ УДАЛЕНИЯ */}
+            {/* ПАНЕЛЬ УПРАВЛЕНИЯ */}
             <div className="pt-8 border-t border-gray-800">
-              {user && (effectiveClearance >= 5 || user.id === selectedReport.author_id) ? (
+              {isAdminOverriding && (
+                <div className="mb-4 flex items-center gap-2 text-yellow-500 bg-yellow-950/20 border border-yellow-900/50 p-3 text-[10px] font-bold uppercase tracking-widest animate-pulse">
+                  <ShieldAlert size={14} /> ВНИМАНИЕ: АКТИВИРОВАН РЕЖИМ ПЕРЕОПРЕДЕЛЕНИЯ (COUNCIL O5 / OMNI)
+                </div>
+              )}
+              
+              {canDelete ? (
                 <div className="flex gap-4">
                   {!isConfirmingDelete ? (
                     <button 
@@ -458,7 +465,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                   ) : (
                     <div className="flex flex-col gap-3 animate-in slide-in-from-left-2 w-full">
                       <div className="text-[10px] text-red-500 font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
-                        <AlertTriangle size={12} /> Подтвердите необратимую операцию удаления рапорта #{selectedReport.id}
+                        <AlertTriangle size={12} /> ПОДТВЕРДИТЕ УДАЛЕНИЕ РАПОРТА #{selectedReport.id}
                       </div>
                       <div className="flex gap-2">
                         <button 
@@ -478,8 +485,8 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                   )}
                 </div>
               ) : (
-                <div className="text-[10px] text-gray-700 font-mono uppercase tracking-widest italic">
-                  Вы не являетесь автором данного рапорта. Доступ к управлению записью ограничен.
+                <div className="text-[10px] text-gray-700 font-mono uppercase tracking-widest italic flex items-center gap-2">
+                  <Lock size={12} /> Управление записью ограничено (Доступно автору или Совету О5)
                 </div>
               )}
             </div>
