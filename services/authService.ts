@@ -1,10 +1,9 @@
-
 import { SecurityClearance } from '../types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
-const STORAGE_KEY = 'scp_net_users';
-// Export SESSION_KEY to allow synchronization of session state across the application
+// Exporting constants at the top level clearly for build tools
 export const SESSION_KEY = 'scp_net_current_session';
+const STORAGE_KEY = 'scp_net_users';
 
 // --- CONFIGURATION ---
 export const ADMIN_EMAIL = 'arseniychekrigin@gmail.com';
