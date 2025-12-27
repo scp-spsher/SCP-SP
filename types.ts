@@ -1,5 +1,6 @@
 
 export const SecurityClearance = {
+  LEVEL_0: 0,
   LEVEL_1: 1,
   LEVEL_2: 2,
   LEVEL_3: 3,
@@ -61,6 +62,15 @@ export interface ChatMessage {
   sender: 'user' | 'system' | 'ai';
   text: string;
   timestamp: Date;
+}
+
+export interface DirectMessage {
+  id: string;
+  sender_id: string;
+  sender_name: string;
+  receiver_id: string;
+  text: string;
+  created_at: string;
 }
 
 export interface TerminalLog {
