@@ -84,7 +84,7 @@ const App: React.FC = () => {
       case 'database': return <Database />;
       case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
-      case 'reports': return <Reports user={currentUser} />;
+      case 'reports': return <Reports user={currentUser} effectiveClearance={simulatedClearance} />;
       case 'admin': return <AdminPanel currentUser={currentUser} />;
       case 'guide': return <Guide />;
       default: return <Dashboard currentClearance={simulatedClearance} />;
@@ -102,6 +102,7 @@ const App: React.FC = () => {
       userEmail={currentUser.id}
       realEmail={currentUser.email}
       isSuperAdmin={currentUser.isSuperAdmin}
+      user={currentUser}
     >
       {renderContent()}
     </Layout>
