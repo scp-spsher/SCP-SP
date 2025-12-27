@@ -24,6 +24,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   
   const hasInitialFetched = useRef(false);
 
+  // Загрузка локальных данных
   const loadLocalReports = useCallback(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -40,6 +41,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     return [];
   }, []);
 
+  // Загрузка данных из БД
   const fetchReports = useCallback(async () => {
     if (!user) return;
     setIsLoading(true);
@@ -58,16 +60,9 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         setUsingLocalFallback(false);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data || []));
       } catch (e: any) {
-        const errorText = e.message || String(e);
-        console.warn("Sync Issue:", errorText);
-        
-        if (errorText.includes('fetch') || errorText.includes('NetworkError')) {
-          setUsingLocalFallback(true);
-          loadLocalReports();
-          setStatusMessage({ text: 'КАНАЛ СВЯЗИ ПРЕРВАН: ИСПОЛЬЗУЕТСЯ ЛОКАЛЬНЫЙ БУФЕР', type: 'error' });
-        } else {
-          loadLocalReports();
-        }
+        console.warn("Sync Issue:", e.message);
+        setUsingLocalFallback(true);
+        loadLocalReports();
       } finally {
         setIsLoading(false);
       }
@@ -135,7 +130,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
       const savedToDb = await saveToBoth(newReport);
       setReports(prev => [newReport, ...prev]);
       setStatusMessage({ 
-        text: savedToDb ? 'РАПОРТ ПЕРЕДАН В ЦЕНТРАЛЬНЫЙ АРХИВ' : 'РАПОРТ СОХРАНЕН ЛОКАЛЬНО', 
+        text: savedToDb ? 'РАПОРТ ПЕРЕДАН В ЦЕНТРАЛЬНЫЙ АРХИВ' : 'РАПОРТ СОХРАНЕН ЛОКАЛЬНО (СБОЙ СЕТИ)', 
         type: 'success' 
       });
       setTimeout(() => {
@@ -151,35 +146,38 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   };
 
   const executeDeletion = async (reportId: string) => {
-    console.log("[TERMINAL] Инициация удаления рапорта:", reportId);
+    console.log("[TERMINAL] Удаление объекта:", reportId);
     
-    // Мгновенная реакция UI
+    // Мгновенно обновляем интерфейс для скорости
     const backupReports = [...reports];
     setReports(prev => prev.filter(r => r.id !== reportId));
     setSelectedReport(null);
     setView('list');
     setIsConfirmingDelete(false);
-    setStatusMessage({ text: 'ОБРАБОТКА УДАЛЕНИЯ...', type: 'success' });
+    setStatusMessage({ text: 'УДАЛЕНИЕ ИЗ БАЗЫ ДАННЫХ...', type: 'success' });
 
     try {
-      let remoteDeleted = false;
+      let dbError = null;
       
-      // 1. Пытаемся удалить из Supabase
+      // 1. Попытка удаления из Supabase
       if (isSupabaseConfigured() && !usingLocalFallback) {
-        console.log("[TERMINAL] Попытка удаления из БД Supabase...");
-        const { error } = await supabase!.from('reports').delete().eq('id', reportId);
+        const { error } = await supabase!
+          .from('reports')
+          .delete()
+          .eq('id', reportId);
         
-        if (error) {
-          console.error("[TERMINAL] Ошибка Supabase:", error);
-          if (error.code === '42501') {
-            throw new Error("ОТКАЗАНО В ДОСТУПЕ (RLS). ПРОВЕРЬТЕ ПРАВА В SQL EDITOR.");
-          }
-          throw error;
-        }
-        remoteDeleted = true;
+        if (error) dbError = error;
       }
 
-      // 2. Гарантированно удаляем из локального хранилища
+      if (dbError) {
+        // Если ошибка в правах (RLS)
+        if (dbError.code === '42501') {
+          throw new Error("ОТКАЗАНО В ДОСТУПЕ. НЕДОСТАТОЧНО ПРАВ НА УДАЛЕНИЕ В БД.");
+        }
+        throw dbError;
+      }
+
+      // 2. Очистка локального кэша
       const localRaw = localStorage.getItem(STORAGE_KEY);
       if (localRaw) {
         const local = JSON.parse(localRaw);
@@ -187,20 +185,28 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
       }
 
-      setStatusMessage({ text: 'ЗАПИСЬ УСПЕШНО УДАЛЕНА ИЗ ВСЕХ РЕЕСТРОВ', type: 'success' });
+      setStatusMessage({ text: 'ОБЪЕКТ УДАЛЕН ИЗ ЦЕНТРАЛЬНОГО РЕЕСТРА', type: 'success' });
       setTimeout(() => setStatusMessage(null), 3000);
 
     } catch (e: any) {
-      const errorMsg = e.message || String(e);
-      console.error("[TERMINAL] Сбой удаления:", errorMsg);
+      console.error("[TERMINAL] Сбой удаления:", e.message);
+      // Возвращаем данные, если удаление не удалось
       setReports(backupReports);
-      setStatusMessage({ text: `ОШИБКА: ${errorMsg.toUpperCase()}`, type: 'error' });
+      setStatusMessage({ text: `СБОЙ: ${e.message.toUpperCase()}`, type: 'error' });
     }
   };
 
+  // ФИЛЬТРАЦИЯ ПО УРОВНЮ ДОПУСКА
   const visibleReports = reports.filter(r => {
     if (!user) return false;
-    if (effectiveClearance < r.author_clearance && user.id !== r.author_id) return false;
+    
+    // 1. Автор всегда видит свой отчет
+    if (user.id === r.author_id) return true;
+    
+    // 2. Если текущий уровень (в т.ч. симуляция) ниже уровня рапорта - скрываем
+    if (effectiveClearance < r.author_clearance) return false;
+    
+    // 3. Поиск
     const query = searchTerm.toLowerCase();
     return r.title.toLowerCase().includes(query) || 
            r.id.toLowerCase().includes(query) ||
@@ -232,12 +238,12 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4">
         <div>
           <h2 className="text-2xl font-bold tracking-widest text-scp-text flex items-center gap-3 uppercase">
-            <FileText className="text-scp-accent" /> Реестр отчетности
+            <FileText className="text-scp-accent" /> Система отчетности
           </h2>
           <div className="flex items-center gap-2 mt-1">
             <Shield size={12} className="text-scp-terminal" />
             <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-              СОТРУДНИК: {user.name} // ДОСТУП: L-{effectiveClearance} // {usingLocalFallback ? 'РЕЖИМ: АВТОНОМНЫЙ' : 'РЕЖИМ: ОНЛАЙН'}
+              ОПЕРАТОР: {user.name} // ТЕКУЩИЙ ДОСТУП: L-{effectiveClearance} // {usingLocalFallback ? 'OFFLINE' : 'ONLINE'}
             </p>
           </div>
         </div>
@@ -245,7 +251,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         <div className="flex gap-2">
           {view !== 'list' && (
             <button 
-              onClick={() => { setView('list'); setStatusMessage(null); setIsConfirmingDelete(false); fetchReports(); }}
+              onClick={() => { setView('list'); setStatusMessage(null); setIsConfirmingDelete(false); }}
               className="px-4 py-2 border border-gray-700 text-gray-400 hover:text-white transition-colors text-xs font-bold uppercase"
             >
               К списку
@@ -255,20 +261,20 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
             onClick={() => { setView('create'); setStatusMessage(null); setIsConfirmingDelete(false); }}
             className="flex items-center gap-2 px-4 py-2 bg-scp-accent text-white hover:bg-red-700 transition-colors text-xs font-bold uppercase shadow-[0_0_15px_rgba(211,47,47,0.3)]"
           >
-            <Plus size={16} /> Создать рапорт
+            <Plus size={16} /> Новый рапорт
           </button>
         </div>
       </div>
 
       {statusMessage && (
-        <div className={`p-4 border font-mono text-xs flex items-center justify-between animate-in slide-in-from-top-2 ${
+        <div className={`p-4 border font-mono text-xs flex items-center justify-between animate-in slide-in-from-top-2 z-50 ${
           statusMessage.type === 'success' ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-red-900/20 border-red-500 text-red-500'
         }`}>
           <div className="flex items-center gap-3">
             {statusMessage.type === 'success' ? <CheckCircle2 size={16}/> : <AlertTriangle size={16}/>}
             {statusMessage.text}
           </div>
-          <button onClick={() => setStatusMessage(null)} className="opacity-50 hover:opacity-100">ЗАКРЫТЬ</button>
+          <button onClick={() => setStatusMessage(null)} className="opacity-50 hover:opacity-100 uppercase font-bold">Закрыть</button>
         </div>
       )}
 
@@ -279,7 +285,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
               <input 
                 type="text" 
-                placeholder="ПОИСК ПО ИДЕНТИФИКАТОРУ, ТЕМЕ ИЛИ ФАМИЛИИ..."
+                placeholder="ПОИСК ПО ИДЕНТИФИКАТОРУ, ЗАГОЛОВКУ ИЛИ АВТОРУ..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-black border border-gray-800 p-3 pl-10 text-sm text-scp-terminal focus:border-scp-terminal focus:outline-none font-mono"
@@ -290,17 +296,16 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center gap-4 py-32">
                   <RefreshCw className="animate-spin text-scp-terminal" size={32} />
-                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">УСТАНОВКА СОЕДИНЕНИЯ...</span>
+                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">Синхронизация данных...</span>
                 </div>
               ) : visibleReports.length > 0 ? (
                 <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-black z-10 shadow-md">
-                    <tr className="text-[10px] uppercase text-gray-500 tracking-wider border-b border-gray-800">
-                      <th className="p-4 pl-6">Шифр</th>
-                      <th className="p-4">Тема</th>
-                      <th className="p-4">Сотрудник</th>
+                  <thead>
+                    <tr className="text-[10px] uppercase text-gray-500 tracking-wider border-b border-gray-800 bg-black/50">
+                      <th className="p-4 pl-6">ID / Тип</th>
+                      <th className="p-4">Заголовок</th>
                       <th className="p-4 text-center">Допуск</th>
-                      <th className="p-4 text-center">Угроза</th>
+                      <th className="p-4 text-center">Severity</th>
                     </tr>
                   </thead>
                   <tbody className="text-sm font-mono text-gray-300 divide-y divide-gray-900">
@@ -316,9 +321,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                         </td>
                         <td className="p-4">
                           <div className="font-bold text-gray-200 truncate max-w-[280px]">{report.title}</div>
-                        </td>
-                        <td className="p-4">
-                          <div className="text-xs text-gray-400">{report.author_name}</div>
+                          <div className="text-[10px] text-gray-600">{report.author_name}</div>
                         </td>
                         <td className="p-4 text-center">
                           <span className="text-[10px] px-1.5 py-0.5 border border-gray-700 bg-black text-gray-400">L-{report.author_clearance}</span>
@@ -333,10 +336,11 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                   </tbody>
                 </table>
               ) : (
-                <div className="flex flex-col items-center justify-center py-32 text-gray-700 grayscale opacity-40">
-                  <Lock size={64} className="mb-4" />
-                  <p className="tracking-[0.3em] text-xs uppercase">Рапорты не найдены или доступ запрещен</p>
-                  <button onClick={fetchReports} className="mt-4 text-[10px] border border-gray-800 px-4 py-2 hover:bg-gray-800 uppercase font-bold">ОБНОВИТЬ</button>
+                <div className="flex flex-col items-center justify-center py-32 text-gray-700">
+                  <Lock size={64} className="mb-4 opacity-20" />
+                  <p className="tracking-[0.3em] text-xs uppercase font-bold">Рапортов не найдено</p>
+                  <p className="text-[9px] mt-2 opacity-50 uppercase tracking-widest text-center">Убедитесь, что ваш уровень допуска достаточен<br/>для просмотра скрытых записей</p>
+                  <button onClick={fetchReports} className="mt-6 text-[10px] border border-gray-800 px-4 py-2 hover:bg-gray-800 uppercase font-bold transition-all">Обновить реестр</button>
                 </div>
               )}
             </div>
@@ -346,7 +350,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         {view === 'create' && (
           <div className="p-8 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
             <h3 className="text-xl font-bold text-scp-text mb-6 uppercase tracking-widest border-b border-gray-800 pb-2 flex items-center gap-2">
-              <Plus size={20} className="text-scp-accent" /> Создание записи
+              <Plus size={20} className="text-scp-accent" /> Создать протокол
             </h3>
             <form onSubmit={handleCreateSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -365,7 +369,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Уровень угрозы</label>
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Приоритет</label>
                   <select 
                     value={formData.severity}
                     onChange={(e) => setFormData({...formData, severity: e.target.value as any})}
@@ -392,7 +396,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                 type="text" 
                 value={formData.target_id}
                 onChange={(e) => setFormData({...formData, target_id: e.target.value})}
-                placeholder="Объект (SCP-####)..."
+                placeholder="Объект (напр. SCP-173)..."
                 className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono"
               />
 
@@ -401,7 +405,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                 rows={8}
                 value={formData.content}
                 onChange={(e) => setFormData({...formData, content: e.target.value})}
-                placeholder="Текст протокола..."
+                placeholder="Детализированный отчет..."
                 className="w-full bg-black border border-gray-700 p-4 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono leading-relaxed"
               />
 
@@ -427,6 +431,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                   <span className="text-blue-400 text-xs font-bold tracking-widest">{getTypeLabel(selectedReport.type)}</span>
                 </div>
                 <h1 className="text-3xl font-black uppercase text-white leading-tight">{selectedReport.title}</h1>
+                <p className="text-xs text-gray-500 font-mono">АВТОР: {selectedReport.author_name} // {new Date(selectedReport.created_at).toLocaleString()}</p>
               </div>
               <div className="text-right shrink-0">
                 <div className="text-2xl font-black text-scp-accent border-2 border-scp-accent px-4 py-1">
@@ -439,32 +444,42 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               {selectedReport.content}
             </div>
 
-            <div className="flex gap-4">
-              {user && (effectiveClearance >= 5 || user.id === selectedReport.author_id) && (
-                <div className="flex gap-2">
+            {/* ПАНЕЛЬ УДАЛЕНИЯ */}
+            <div className="pt-8 border-t border-gray-800">
+              {user && (effectiveClearance >= 5 || user.id === selectedReport.author_id) ? (
+                <div className="flex gap-4">
                   {!isConfirmingDelete ? (
                     <button 
                       onClick={() => setIsConfirmingDelete(true)}
-                      className="flex items-center gap-2 p-2 text-[10px] text-red-500 hover:bg-red-900/20 transition-colors uppercase font-bold border border-red-900/30"
+                      className="flex items-center gap-2 p-3 text-[10px] text-red-500 hover:bg-red-900/20 transition-all uppercase font-bold border border-red-900/30"
                     >
-                      <Trash2 size={12} /> Удалить рапорт
+                      <Trash2 size={14} /> Удалить запись
                     </button>
                   ) : (
-                    <div className="flex items-center gap-2 animate-in slide-in-from-left-2">
-                      <button 
-                        onClick={() => executeDeletion(selectedReport.id)}
-                        className="flex items-center gap-2 p-2 text-[10px] bg-red-600 text-white hover:bg-red-700 transition-colors uppercase font-bold border border-red-600"
-                      >
-                        <CheckCircle2 size={12} /> ПОДТВЕРДИТЬ УДАЛЕНИЕ
-                      </button>
-                      <button 
-                        onClick={() => setIsConfirmingDelete(false)}
-                        className="flex items-center gap-2 p-2 text-[10px] text-gray-400 hover:bg-gray-800 transition-colors uppercase font-bold border border-gray-700"
-                      >
-                        <X size={12} /> ОТМЕНА
-                      </button>
+                    <div className="flex flex-col gap-3 animate-in slide-in-from-left-2 w-full">
+                      <div className="text-[10px] text-red-500 font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
+                        <AlertTriangle size={12} /> Подтвердите необратимую операцию удаления рапорта #{selectedReport.id}
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => executeDeletion(selectedReport.id)}
+                          className="flex items-center gap-2 p-3 text-[10px] bg-red-600 text-white hover:bg-red-700 transition-colors uppercase font-bold border border-red-600 shadow-[0_0_10px_rgba(220,38,38,0.3)]"
+                        >
+                          <CheckCircle2 size={14} /> УДАЛИТЬ НАВСЕГДА
+                        </button>
+                        <button 
+                          onClick={() => setIsConfirmingDelete(false)}
+                          className="flex items-center gap-2 p-3 text-[10px] text-gray-400 hover:bg-gray-800 transition-colors uppercase font-bold border border-gray-700"
+                        >
+                          <X size={14} /> ОТМЕНИТЬ
+                        </button>
+                      </div>
                     </div>
                   )}
+                </div>
+              ) : (
+                <div className="text-[10px] text-gray-700 font-mono uppercase tracking-widest italic">
+                  Вы не являетесь автором данного рапорта. Доступ к управлению записью ограничен.
                 </div>
               )}
             </div>
