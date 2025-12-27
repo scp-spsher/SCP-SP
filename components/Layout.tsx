@@ -11,7 +11,8 @@ import {
   UserCircle,
   Eye,
   ChevronDown,
-  Users
+  Users,
+  Mail
 } from 'lucide-react';
 import { SCPLogo } from './SCPLogo';
 
@@ -54,14 +55,15 @@ const Layout: React.FC<LayoutProps> = ({
   const isO5View = simulatedClearance >= 5;
 
   const navItems = [
-    { id: 'dashboard', label: isO5View ? 'ГЛАЗ БОГА' : 'ОБЗОР', icon: isO5View ? Eye : Activity, minClearance: 1 },
-    { id: 'profile', label: 'ID КАРТА', icon: UserCircle, minClearance: 1 },
+    { id: 'dashboard', label: isO5View ? 'ГЛАЗ БОГА' : 'ОБЗОР', icon: isO5View ? Eye : Activity, minClearance: 0 },
+    { id: 'profile', label: 'ID КАРТА', icon: UserCircle, minClearance: 0 },
+    { id: 'messages', label: 'СООБЩЕНИЯ', icon: Mail, minClearance: 0 },
     { id: 'database', label: 'АРХИВ', icon: Database, minClearance: 2 },
-    { id: 'reports', label: 'ОТЧЕТЫ', icon: FileText, minClearance: 2 },
+    { id: 'reports', label: 'ОТЧЕТЫ', icon: FileText, minClearance: 1 },
     { id: 'comms', label: 'СПЕЦСВЯЗЬ', icon: MessageSquare, minClearance: 3 },
     { id: 'terminal', label: 'ТЕРМИНАЛ', icon: Terminal, minClearance: 4 },
     { id: 'admin', label: 'ПЕРСОНАЛ', icon: Users, minClearance: 5 },
-    { id: 'guide', label: 'РУКОВОДСТВО', icon: BookOpen, minClearance: 1 },
+    { id: 'guide', label: 'РУКОВОДСТВО', icon: BookOpen, minClearance: 0 },
   ];
 
   const borderColor = isO5View ? 'border-yellow-900/50' : 'border-gray-800';
@@ -77,7 +79,7 @@ const Layout: React.FC<LayoutProps> = ({
           <h1 className={`text-xl font-bold tracking-widest text-center transition-colors duration-500 ${isO5View ? 'text-yellow-500' : ''}`}>
             {isSuperAdmin && displayClearance === 6 ? 'SCPNET [ADMIN]' : (isO5View ? 'SCPNET [O5]' : 'SCPNET')}
           </h1>
-          <p className="text-xs text-gray-500 tracking-tighter mt-1">
+          <p className="text-xs text-gray-500 tracking-tighter mt-1 uppercase">
             {isO5View ? 'ГЛОБАЛЬНОЕ НАБЛЮДЕНИЕ' : 'ЗАЩИЩЕННОЕ СОЕДИНЕНИЕ'}
           </p>
         </div>
@@ -97,6 +99,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <option value={3}>УРОВЕНЬ 3: СЕКРЕТНО</option>
                 <option value={2}>УРОВЕНЬ 2: ОГРАНИЧЕННЫЙ</option>
                 <option value={1}>УРОВЕНЬ 1: ДСП</option>
+                <option value={0}>УРОВЕНЬ 0: СТАЖЕР</option>
               </select>
               <ChevronDown size={12} className="absolute right-2 top-2.5 text-gray-500 pointer-events-none" />
             </div>
