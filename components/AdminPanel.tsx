@@ -12,6 +12,7 @@ const SECRET_ADMIN_ID = '36046d5d-dde4-4cf6-a2de-794334b7af5c';
 interface AdminPanelProps {
   currentUser: StoredUser | null;
   onUserUpdate?: (user: StoredUser) => void;
+  onViewProfile?: (userId: string) => void;
 }
 
 interface AdminUser {
@@ -26,7 +27,7 @@ interface AdminUser {
   avatar_url?: string;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onViewProfile }) => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
@@ -307,26 +308,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate }) =>
                        </div>
                     </div>
                  </div>
-                 <div className="text-right">
-                    <label className="text-[10px] text-gray-500 uppercase block mb-1">Допуск</label>
-                    <select 
-                        value={editForm.clearance}
-                        onChange={(e) => handleFormChange('clearance', Number(e.target.value))}
-                        className={`bg-black border ${isSecretAdmin ? 'border-scp-terminal text-scp-terminal' : 'border-scp-accent text-scp-accent'} text-xl font-bold p-2 text-right focus:outline-none`}
+                 <div className="text-right flex flex-col items-end gap-2">
+                    <button 
+                        onClick={() => onViewProfile && onViewProfile(editForm.id)}
+                        className="text-[10px] font-bold bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1 hover:bg-scp-terminal hover:text-black transition-colors uppercase tracking-widest"
                     >
-                        {isSecretAdmin ? (
-                           <option value={6}>L-4 (MASKED)</option>
-                        ) : (
-                          <>
-                            <option value={1}>L-1</option>
-                            <option value={2}>L-2</option>
-                            <option value={3}>L-3</option>
-                            <option value={4}>L-4</option>
-                            <option value={5}>L-5</option>
-                            <option value={6}>OMNI</option>
-                          </>
-                        )}
-                    </select>
+                        Посмотреть ID-карту
+                    </button>
+                    <div>
+                        <label className="text-[10px] text-gray-500 uppercase block mb-1">Допуск</label>
+                        <select 
+                            value={editForm.clearance}
+                            onChange={(e) => handleFormChange('clearance', Number(e.target.value))}
+                            className={`bg-black border ${isSecretAdmin ? 'border-scp-terminal text-scp-terminal' : 'border-scp-accent text-scp-accent'} text-xl font-bold p-2 text-right focus:outline-none`}
+                        >
+                            {isSecretAdmin ? (
+                            <option value={6}>L-4 (MASKED)</option>
+                            ) : (
+                            <>
+                                <option value={1}>L-1</option>
+                                <option value={2}>L-2</option>
+                                <option value={3}>L-3</option>
+                                <option value={4}>L-4</option>
+                                <option value={5}>L-5</option>
+                                <option value={6}>OMNI</option>
+                            </>
+                            )}
+                        </select>
+                    </div>
                  </div>
               </div>
 
@@ -460,23 +469,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate }) =>
                         return (
                         <tr 
                           key={user.id} 
-                          onClick={() => handleOpenDossier(user)}
-                          className="hover:bg-gray-900/50 transition-colors cursor-pointer group"
+                          className="hover:bg-gray-900/50 transition-colors group"
                         >
                             <td className="p-4 pl-6">
-                                <div className="font-bold text-white group-hover:text-scp-terminal transition-colors">{user.name}</div>
+                                <button 
+                                    onClick={() => onViewProfile && onViewProfile(user.id)}
+                                    className="font-bold text-white hover:text-scp-terminal transition-colors text-left underline decoration-dotted decoration-gray-800 hover:decoration-scp-terminal"
+                                >
+                                    {user.name}
+                                </button>
                                 <div className="text-xs text-gray-600 truncate max-w-[200px]">{user.id}</div>
                             </td>
-                            <td className="p-4 hidden md:table-cell">
+                            <td className="p-4 hidden md:table-cell" onClick={() => handleOpenDossier(user)}>
                                 <div className="text-xs text-gray-400">{user.title || 'ВНЕ ШТАТА'}</div>
                                 <div className="text-[10px] text-gray-600 uppercase">{user.site || 'Z-19'}</div>
                             </td>
-                            <td className="p-4 text-center">
+                            <td className="p-4 text-center" onClick={() => handleOpenDossier(user)}>
                                 <span className={`inline-block px-2 py-1 border text-[10px] font-bold ${displayLvl >= 5 ? 'border-yellow-600 text-yellow-500' : 'border-gray-700 text-gray-400'}`}>
                                    L-{displayLvl}
                                 </span>
                             </td>
-                            <td className="p-4 text-center">
+                            <td className="p-4 text-center" onClick={() => handleOpenDossier(user)}>
                                 {user.is_approved ? (
                                     <span className="text-green-500 text-[10px] uppercase font-bold">Активен</span>
                                 ) : (
@@ -484,16 +497,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate }) =>
                                 )}
                             </td>
                             <td className="p-4 text-right pr-6">
-                                {!user.is_approved ? (
-                                    <button 
-                                        onClick={(e) => handleQuickApprove(e, user.id)}
-                                        className="bg-scp-terminal text-black text-xs font-bold px-3 py-1 hover:bg-green-400 transition-colors ml-auto"
-                                    >
-                                        APPROVE
-                                    </button>
-                                ) : (
-                                   <FileText size={18} className="text-gray-600 ml-auto" />
-                                )}
+                                <div className="flex items-center justify-end gap-3">
+                                    {!user.is_approved ? (
+                                        <button 
+                                            onClick={(e) => handleQuickApprove(e, user.id)}
+                                            className="bg-scp-terminal text-black text-xs font-bold px-3 py-1 hover:bg-green-400 transition-colors"
+                                        >
+                                            APPROVE
+                                        </button>
+                                    ) : (
+                                       <button onClick={() => handleOpenDossier(user)} className="p-1 hover:text-white transition-colors">
+                                            <FileText size={18} className="text-gray-600 group-hover:text-gray-400" />
+                                       </button>
+                                    )}
+                                </div>
                             </td>
                         </tr>
                         );
