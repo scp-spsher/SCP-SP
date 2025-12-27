@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff } from 'lucide-react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
 import { StoredUser } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -8,9 +8,10 @@ const STORAGE_KEY = 'scp_net_reports_local';
 
 interface ReportsProps {
   user: StoredUser;
+  effectiveClearance: number; 
 }
 
-const Reports: React.FC<ReportsProps> = ({ user }) => {
+const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   const [reports, setReports] = useState<SCPReport[]>([]);
   const [view, setView] = useState<'list' | 'create' | 'detail'>('list');
   const [selectedReport, setSelectedReport] = useState<SCPReport | null>(null);
@@ -19,6 +20,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'error' | 'success'} | null>(null);
   const [usingLocalFallback, setUsingLocalFallback] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   
   const hasInitialFetched = useRef(false);
 
@@ -148,60 +150,57 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("ВНИМАНИЕ: УДАЛЕНИЕ ЗАПИСИ ИЗ ЦЕНТРАЛЬНОГО РЕЕСТРА. ПОДТВЕРДИТЬ?")) return;
+  const executeDeletion = async (reportId: string) => {
+    console.log("[TERMINAL] Инициация удаления рапорта:", reportId);
     
-    setStatusMessage({ text: 'УДАЛЕНИЕ...', type: 'success' });
+    // Мгновенная реакция UI
+    const backupReports = [...reports];
+    setReports(prev => prev.filter(r => r.id !== reportId));
+    setSelectedReport(null);
+    setView('list');
+    setIsConfirmingDelete(false);
+    setStatusMessage({ text: 'ОБРАБОТКА УДАЛЕНИЯ...', type: 'success' });
 
     try {
       let remoteDeleted = false;
       
       // 1. Пытаемся удалить из Supabase
       if (isSupabaseConfigured() && !usingLocalFallback) {
-        const { error } = await supabase!.from('reports').delete().eq('id', id);
+        console.log("[TERMINAL] Попытка удаления из БД Supabase...");
+        const { error } = await supabase!.from('reports').delete().eq('id', reportId);
         
         if (error) {
+          console.error("[TERMINAL] Ошибка Supabase:", error);
           if (error.code === '42501') {
-            throw new Error("ОТКАЗАНО В ДОСТУПЕ: У ВАС НЕТ ПРАВ НА УДАЛЕНИЕ ЭТОГО РАПОРТА");
+            throw new Error("ОТКАЗАНО В ДОСТУПЕ (RLS). ПРОВЕРЬТЕ ПРАВА В SQL EDITOR.");
           }
           throw error;
         }
         remoteDeleted = true;
       }
 
-      // 2. Гарантированно удаляем из локального стейта и хранилища
-      setReports(prev => prev.filter(r => r.id !== id));
-      
+      // 2. Гарантированно удаляем из локального хранилища
       const localRaw = localStorage.getItem(STORAGE_KEY);
       if (localRaw) {
         const local = JSON.parse(localRaw);
-        const filtered = local.filter((r: any) => r.id !== id);
+        const filtered = local.filter((r: any) => r.id !== reportId);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
       }
 
-      setStatusMessage({ 
-        text: remoteDeleted ? 'ЗАПИСЬ УСПЕШНО УДАЛЕНА ИЗ ВСЕХ РЕЕСТРОВ' : 'ЗАПИСЬ УДАЛЕНА ЛОКАЛЬНО', 
-        type: 'success' 
-      });
-
-      setSelectedReport(null);
-      setView('list');
-      
+      setStatusMessage({ text: 'ЗАПИСЬ УСПЕШНО УДАЛЕНА ИЗ ВСЕХ РЕЕСТРОВ', type: 'success' });
       setTimeout(() => setStatusMessage(null), 3000);
 
     } catch (e: any) {
       const errorMsg = e.message || String(e);
-      console.error("Delete Error:", errorMsg);
-      setStatusMessage({ 
-        text: `ОШИБКА УДАЛЕНИЯ: ${errorMsg.toUpperCase()}`, 
-        type: 'error' 
-      });
+      console.error("[TERMINAL] Сбой удаления:", errorMsg);
+      setReports(backupReports);
+      setStatusMessage({ text: `ОШИБКА: ${errorMsg.toUpperCase()}`, type: 'error' });
     }
   };
 
   const visibleReports = reports.filter(r => {
     if (!user) return false;
-    if (user.clearance < r.author_clearance && user.id !== r.author_id) return false;
+    if (effectiveClearance < r.author_clearance && user.id !== r.author_id) return false;
     const query = searchTerm.toLowerCase();
     return r.title.toLowerCase().includes(query) || 
            r.id.toLowerCase().includes(query) ||
@@ -238,7 +237,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
           <div className="flex items-center gap-2 mt-1">
             <Shield size={12} className="text-scp-terminal" />
             <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-              СОТРУДНИК: {user.name} // ДОСТУП: L-{user.clearance} // {usingLocalFallback ? 'РЕЖИМ: АВТОНОМНЫЙ' : 'РЕЖИМ: ОНЛАЙН'}
+              СОТРУДНИК: {user.name} // ДОСТУП: L-{effectiveClearance} // {usingLocalFallback ? 'РЕЖИМ: АВТОНОМНЫЙ' : 'РЕЖИМ: ОНЛАЙН'}
             </p>
           </div>
         </div>
@@ -246,14 +245,14 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
         <div className="flex gap-2">
           {view !== 'list' && (
             <button 
-              onClick={() => { setView('list'); setStatusMessage(null); fetchReports(); }}
+              onClick={() => { setView('list'); setStatusMessage(null); setIsConfirmingDelete(false); fetchReports(); }}
               className="px-4 py-2 border border-gray-700 text-gray-400 hover:text-white transition-colors text-xs font-bold uppercase"
             >
               К списку
             </button>
           )}
           <button 
-            onClick={() => { setView('create'); setStatusMessage(null); }}
+            onClick={() => { setView('create'); setStatusMessage(null); setIsConfirmingDelete(false); }}
             className="flex items-center gap-2 px-4 py-2 bg-scp-accent text-white hover:bg-red-700 transition-colors text-xs font-bold uppercase shadow-[0_0_15px_rgba(211,47,47,0.3)]"
           >
             <Plus size={16} /> Создать рапорт
@@ -308,7 +307,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
                     {visibleReports.map((report) => (
                       <tr 
                         key={report.id}
-                        onClick={() => { setSelectedReport(report); setView('detail'); }}
+                        onClick={() => { setSelectedReport(report); setView('detail'); setIsConfirmingDelete(false); }}
                         className="hover:bg-gray-900/50 transition-colors cursor-pointer group"
                       >
                         <td className="p-4 pl-6">
@@ -441,13 +440,32 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
             </div>
 
             <div className="flex gap-4">
-              {user && (user.clearance >= 5 || user.id === selectedReport.author_id) && (
-                <button 
-                  onClick={() => handleDelete(selectedReport.id)}
-                  className="flex items-center gap-2 p-2 text-[10px] text-red-500 hover:bg-red-900/20 transition-colors uppercase font-bold border border-red-900/30"
-                >
-                  <Trash2 size={12} /> Удалить рапорт
-                </button>
+              {user && (effectiveClearance >= 5 || user.id === selectedReport.author_id) && (
+                <div className="flex gap-2">
+                  {!isConfirmingDelete ? (
+                    <button 
+                      onClick={() => setIsConfirmingDelete(true)}
+                      className="flex items-center gap-2 p-2 text-[10px] text-red-500 hover:bg-red-900/20 transition-colors uppercase font-bold border border-red-900/30"
+                    >
+                      <Trash2 size={12} /> Удалить рапорт
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 animate-in slide-in-from-left-2">
+                      <button 
+                        onClick={() => executeDeletion(selectedReport.id)}
+                        className="flex items-center gap-2 p-2 text-[10px] bg-red-600 text-white hover:bg-red-700 transition-colors uppercase font-bold border border-red-600"
+                      >
+                        <CheckCircle2 size={12} /> ПОДТВЕРДИТЬ УДАЛЕНИЕ
+                      </button>
+                      <button 
+                        onClick={() => setIsConfirmingDelete(false)}
+                        className="flex items-center gap-2 p-2 text-[10px] text-gray-400 hover:bg-gray-800 transition-colors uppercase font-bold border border-gray-700"
+                      >
+                        <X size={12} /> ОТМЕНА
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
