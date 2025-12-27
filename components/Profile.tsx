@@ -15,7 +15,7 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ТАЙНАЯ ЛОГИКА МАСКИРОВКИ ДЛЯ UI
+  // ТАЙНАЯ ЛОГИКА МАСКИРОВКИ ДЛЯ UI (только для уровня допуска)
   const displayClearance = useMemo(() => {
     if (user?.id === SECRET_ADMIN_ID && currentClearance === 6) {
       return 4;
@@ -24,8 +24,6 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
   }, [user, currentClearance]);
 
   const isSimulatedO5 = currentClearance >= 5;
-  const isSimulatedAdmin = currentClearance === 6;
-  
   const isDisplayingAdmin = displayClearance === 6;
 
   const cardColor = isSimulatedO5 ? 'border-yellow-500' : 'border-gray-600';
@@ -111,20 +109,20 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
                 <div>
                   <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><Briefcase size={10} /> Назначение</label>
                   <div className="text-sm text-gray-300 font-mono">
-                    {isDisplayingAdmin ? 'Администратор' : (isSimulatedO5 ? 'Смотритель' : (user.title || 'Полевой Агент'))}
+                    {user.title || (isDisplayingAdmin ? 'Администратор' : (isSimulatedO5 ? 'Смотритель' : 'Полевой Агент'))}
                   </div>
                 </div>
                 <div>
                   <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><Shield size={10} /> Отдел</label>
                   <div className="text-sm text-gray-300 font-mono">
-                     {isDisplayingAdmin ? 'Командование О5' : (isSimulatedO5 ? 'Совет О5' : (user.department || 'Общие обязанности'))}
+                     {user.department || (isDisplayingAdmin ? 'Командование О5' : (isSimulatedO5 ? 'Совет О5' : 'Общие обязанности'))}
                   </div>
                 </div>
               </div>
               <div>
                 <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><MapPin size={10} /> Текущая локация</label>
                 <div className="text-sm text-gray-300 font-mono">
-                  {isDisplayingAdmin ? 'Зона-01' : (isSimulatedO5 ? '[УДАЛЕНО]' : (user.site || 'Зона-19'))}
+                  {user.site || (isSimulatedO5 ? '[УДАЛЕНО]' : 'Зона-19')}
                 </div>
               </div>
            </div>
@@ -139,7 +137,7 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
       {isSimulatedO5 && (
         <div className="mt-8 p-4 border border-yellow-900/50 bg-yellow-900/10 w-full text-center">
            <p className="text-yellow-600 text-xs font-bold tracking-[0.2em] uppercase">
-             {isSimulatedAdmin ? '⚠ ПРЕДОСТАВЛЕН ROOT-ДОСТУП' : '⚠ ОБНАРУЖЕНА АВТОРИЗАЦИЯ КОМАНДОВАНИЯ'}
+             {displayClearance === 6 ? '⚠ ПРЕДОСТАВЛЕН ROOT-ДОСТУП' : '⚠ ОБНАРУЖЕНА АВТОРИЗАЦИЯ КОМАНДОВАНИЯ'}
            </p>
         </div>
       )}
