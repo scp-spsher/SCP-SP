@@ -13,28 +13,20 @@ import AdminPanel from './components/AdminPanel';
 import { authService, StoredUser } from './services/authService';
 
 const App: React.FC = () => {
-  // Initial state from localStorage (synchronous)
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
-  
-  // State for Admin Simulation (View As)
   const [simulatedClearance, setSimulatedClearance] = useState<number>(1);
 
   useEffect(() => {
     const initApp = async () => {
       let user = currentUser;
-
-      // 1. If no local session, try to recover from active Supabase auth
       if (!user) {
         user = await authService.tryRecoverSession();
       }
-
-      // 2. If we have a user, try to refresh their data (e.g. check if still approved)
       if (user) {
         const freshUser = await authService.refreshSession();
         if (!freshUser) {
-           // User was explicitly invalidated (deleted or unapproved)
            authService.logout();
            setCurrentUser(null);
         } else {
@@ -43,10 +35,8 @@ const App: React.FC = () => {
       } else {
         setCurrentUser(null);
       }
-      
       setIsLoadingSession(false);
     };
-
     initApp();
   }, []);
 
@@ -72,7 +62,6 @@ const App: React.FC = () => {
     setCurrentUser(updatedUser);
   };
 
-  // Loading state while checking/restoring session
   if (isLoadingSession) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center font-mono">
@@ -95,7 +84,7 @@ const App: React.FC = () => {
       case 'database': return <Database />;
       case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
-      case 'reports': return <Reports />;
+      case 'reports': return <Reports user={currentUser} />;
       case 'admin': return <AdminPanel currentUser={currentUser} />;
       case 'guide': return <Guide />;
       default: return <Dashboard currentClearance={simulatedClearance} />;
