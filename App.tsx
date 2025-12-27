@@ -47,28 +47,28 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && isSupabaseConfigured()) {
        setSimulatedClearance(currentUser.isSuperAdmin ? 6 : currentUser.clearance);
        
-       // Realtime Notifications
-       if (isSupabaseConfigured()) {
-         const channel = supabase
-           .channel('global_messages')
-           .on('postgres_changes', 
-             { event: 'INSERT', schema: 'public', table: 'messages' }, 
-             (payload) => {
-               const newMsg = payload.new;
-               const isForMe = newMsg.receiver_id === currentUser.id;
-               const isForAdminPool = (currentUser.clearance >= 5 && newMsg.receiver_id === ADMIN_POOL_ID);
-               
-               if ((isForMe || isForAdminPool) && currentPage !== 'messages') {
-                 setUnreadCount(prev => prev + 1);
-               }
+       // Глобальный слушатель новых сообщений для бейджа уведомлений
+       const channel = supabase!
+         .channel('notifications')
+         .on('postgres_changes', 
+           { event: 'INSERT', schema: 'public', table: 'messages' }, 
+           (payload) => {
+             const newMsg = payload.new;
+             // Уведомляем админа, если сообщение в пул, или сотрудника, если сообщение ему
+             const isForMe = newMsg.receiver_id === currentUser.id;
+             const isForAdminPool = (currentUser.clearance >= 5 && newMsg.receiver_id === ADMIN_POOL_ID);
+             
+             if ((isForMe || isForAdminPool) && newMsg.sender_id !== currentUser.id && currentPage !== 'messages') {
+               setUnreadCount(prev => prev + 1);
              }
-           )
-           .subscribe();
-         return () => { supabase.removeChannel(channel); };
-       }
+           }
+         )
+         .subscribe();
+
+       return () => { supabase!.removeChannel(channel); };
     }
   }, [currentUser, currentPage]);
 
@@ -105,7 +105,7 @@ const App: React.FC = () => {
 
   const handleNavigate = (page: string) => {
       if (page === 'profile') setViewedUser(null);
-      if (page === 'messages') setUnreadCount(0);
+      if (page === 'messages') setUnreadCount(0); // Сброс при входе
       setCurrentPage(page);
   };
 
