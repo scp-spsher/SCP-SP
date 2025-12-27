@@ -17,11 +17,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    name: '',
-    clearance: 1
+    name: ''
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -35,15 +34,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsProcessing(true);
     setStatus(mode === 'login' ? 'ПРОВЕРКА ДАННЫХ...' : 'ОБРАБОТКА РЕГИСТРАЦИИ...');
 
-    // Small artificial delay for effect
     setTimeout(async () => {
       try {
         if (mode === 'register') {
+          // Default clearance is always 1 for new recruits
           const result = await authService.register(
             formData.email, 
             formData.name, 
             formData.password, 
-            Number(formData.clearance)
+            1 
           );
           
           setStatus(result.message);
@@ -76,17 +75,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-black text-scp-text font-mono flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Ambience */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-gray-900 via-black to-black opacity-80 z-0"></div>
-      
-      {/* Scanlines */}
       <div className="absolute inset-0 pointer-events-none opacity-5 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] z-0"></div>
 
       <div className="relative z-10 w-full max-w-md border border-gray-800 bg-gray-950/90 p-8 shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-md">
-        
-        {/* Header */}
         <div className="text-center mb-8 border-b border-gray-800 pb-6 relative">
-          
           <div className="mx-auto w-20 h-20 mb-4 text-scp-text flex items-center justify-center animate-pulse-slow">
             <SCPLogo className="w-full h-full" />
           </div>
@@ -97,7 +90,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </p>
         </div>
 
-        {/* Mode Toggle */}
         <div className="flex mb-6 border border-gray-800">
           <button
             onClick={() => { setMode('login'); setStatus('ОЖИДАНИЕ ВВОДА...'); }}
@@ -117,7 +109,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className="text-[10px] text-scp-dim uppercase tracking-widest flex items-center gap-2">
@@ -164,26 +155,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             />
           </div>
 
-          {mode === 'register' && (
-            <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
-              <label className="text-[10px] text-scp-dim uppercase tracking-widest flex items-center gap-2">
-                <Lock size={10} /> Уровень допуска
-              </label>
-              <select 
-                name="clearance"
-                value={formData.clearance}
-                onChange={handleInputChange}
-                className="w-full bg-black/50 border border-gray-700 p-3 text-gray-300 focus:border-scp-terminal focus:outline-none transition-colors font-mono cursor-pointer"
-              >
-                <option value={1}>УРОВЕНЬ 1 (ДСП)</option>
-                <option value={2}>УРОВЕНЬ 2 (ОГРАНИЧЕННЫЙ)</option>
-                <option value={3}>УРОВЕНЬ 3 (СЕКРЕТНО)</option>
-                <option value={4}>УРОВЕНЬ 4 (СОВ. СЕКРЕТНО)</option>
-                <option value={5}>УРОВЕНЬ 5 (ТАУМИЭЛЬ)</option>
-              </select>
-            </div>
-          )}
-
           <div className="pt-4">
              <div className="h-px w-full bg-gradient-to-r from-transparent via-gray-800 to-transparent mb-6"></div>
              
@@ -201,13 +172,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               ) : mode === 'login' ? (
                 <><LogIn size={16} /> АВТОРИЗАЦИЯ</>
               ) : (
-                <><UserPlus size={16} /> СОЗДАТЬ ЗАПИСЬ</>
+                <><UserPlus size={16} /> ОТПРАВИТЬ ЗАЯВКУ</>
               )}
             </button>
           </div>
         </form>
 
-        {/* Status Output */}
         <div className="mt-6 p-3 bg-black border border-gray-800 text-center min-h-[48px] flex items-center justify-center">
           <span className={`text-xs font-bold tracking-wider ${
              status.includes('ОШИБКА') || status.includes('ЗАПРЕЩЕН') ? 'text-scp-accent' : 
@@ -217,12 +187,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </span>
         </div>
 
-        {/* Footer */}
         <div className="mt-6 flex items-start gap-2 opacity-50">
           <AlertCircle size={12} className="text-scp-accent shrink-0 mt-0.5" />
           <p className="text-[9px] text-gray-500 uppercase leading-relaxed">
-            Этот терминал находится под наблюдением AIAD (Отдел Искусственного Интеллекта). 
-            Попытки обхода защиты приведут к развертыванию МОГ.
+            При регистрации вам будет присвоен Уровень 1. Повышение допуска производится Советом О5 после проверки личности.
           </p>
         </div>
       </div>
