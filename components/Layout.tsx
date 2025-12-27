@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { 
   Database, 
@@ -71,6 +72,9 @@ const Layout: React.FC<LayoutProps> = ({
   const borderColor = isO5View ? 'border-yellow-900/50' : 'border-gray-800';
   const activeBg = isO5View ? 'bg-yellow-900/20 text-yellow-500 border-yellow-500' : 'bg-gray-900 text-white border-scp-accent';
 
+  // Filter items based on access level
+  const accessibleNavItems = navItems.filter(item => simulatedClearance >= item.minClearance);
+
   return (
     <div className="flex h-screen bg-scp-dark text-scp-text font-mono overflow-hidden">
       <aside className={`hidden md:flex flex-col w-64 border-r ${borderColor} bg-scp-panel z-10 transition-all duration-500`}>
@@ -110,34 +114,26 @@ const Layout: React.FC<LayoutProps> = ({
 
         <nav className="flex-1 overflow-y-auto py-4">
           <ul className="space-y-1">
-            {navItems.map((item) => {
-              const hasAccess = simulatedClearance >= item.minClearance;
+            {accessibleNavItems.map((item) => {
               const hasUnread = item.showBadge && unreadMessages > 0;
               return (
                 <li key={item.id}>
-                  {hasAccess ? (
-                     <button
-                     onClick={() => onNavigate(item.id)}
-                     className={`w-full flex items-center px-6 py-3 text-sm transition-colors duration-200 border-l-4 relative ${
-                       currentPage === item.id 
-                         ? activeBg
-                         : 'border-transparent text-gray-400 hover:bg-gray-900 hover:text-white'
-                     }`}
-                   >
-                     <item.icon size={18} className="mr-3" />
-                     {item.label}
-                     {hasUnread && (
-                        <span className="absolute right-4 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-[10px] text-white font-bold animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)] border border-black/20">
-                          {unreadMessages > 9 ? '9+' : unreadMessages}
-                        </span>
-                     )}
-                   </button>
-                  ) : (
-                    <div className="w-full flex items-center px-6 py-3 text-sm text-gray-700 cursor-not-allowed select-none">
-                      <item.icon size={18} className="mr-3 opacity-20" />
-                      <span className="opacity-40">{item.label} [БЛОК]</span>
-                    </div>
-                  )}
+                  <button
+                    onClick={() => onNavigate(item.id)}
+                    className={`w-full flex items-center px-6 py-3 text-sm transition-colors duration-200 border-l-4 relative ${
+                      currentPage === item.id 
+                        ? activeBg
+                        : 'border-transparent text-gray-400 hover:bg-gray-900 hover:text-white'
+                    }`}
+                  >
+                    <item.icon size={18} className="mr-3" />
+                    {item.label}
+                    {hasUnread && (
+                      <span className="absolute right-4 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-[10px] text-white font-bold animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)] border border-black/20">
+                        {unreadMessages > 9 ? '9+' : unreadMessages}
+                      </span>
+                    )}
+                  </button>
                 </li>
               );
             })}
@@ -181,25 +177,22 @@ const Layout: React.FC<LayoutProps> = ({
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-16 left-0 w-full h-[calc(100%-4rem)] bg-scp-dark z-30 border-b border-gray-800 p-4">
              <ul className="space-y-2">
-            {navItems.map((item) => {
-               const hasAccess = simulatedClearance >= item.minClearance;
+            {accessibleNavItems.map((item) => {
                const hasUnread = item.showBadge && unreadMessages > 0;
                return (
                 <li key={item.id}>
-                  {hasAccess ? (
-                    <button
-                      onClick={() => { onNavigate(item.id); setIsMobileMenuOpen(false); }}
-                      className={`w-full flex items-center px-4 py-4 text-sm border-l-2 relative ${currentPage === item.id ? activeBg : 'border-transparent text-gray-400 hover:bg-gray-900'}`}
-                    >
-                      <item.icon size={18} className="mr-3" />
-                      {item.label}
-                      {hasUnread && (
-                        <span className="ml-auto px-2 py-0.5 bg-red-600 text-white text-[10px] rounded-full font-bold">
-                          {unreadMessages}
-                        </span>
-                      )}
-                    </button>
-                  ) : null}
+                  <button
+                    onClick={() => { onNavigate(item.id); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center px-4 py-4 text-sm border-l-2 relative ${currentPage === item.id ? activeBg : 'border-transparent text-gray-400 hover:bg-gray-900'}`}
+                  >
+                    <item.icon size={18} className="mr-3" />
+                    {item.label}
+                    {hasUnread && (
+                      <span className="ml-auto px-2 py-0.5 bg-red-600 text-white text-[10px] rounded-full font-bold">
+                        {unreadMessages}
+                      </span>
+                    )}
+                  </button>
                 </li>
                );
             })}
