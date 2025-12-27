@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Shield, MessageSquare, Lock, ArrowLeft, Users, RefreshCw } from 'lucide-react';
+import { Send, Shield, MessageSquare, Lock, ArrowLeft, Users, RefreshCw, AlertCircle } from 'lucide-react';
 import { StoredUser, authService } from '../services/authService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 
@@ -26,14 +25,33 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
   const [inputText, setInputText] = useState('');
   const [view, setView] = useState<'contacts' | 'chat'>('contacts');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorInfo, setErrorInfo] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = currentUser.clearance >= 5;
 
-  // 1. Инициализация чата
+  // Хелпер для надежного форматирования ошибок Supabase
+  const formatError = (error: any): string => {
+    if (!error) return "НЕИЗВЕСТНАЯ ОШИБКА";
+    if (typeof error === 'string') return error;
+    
+    // Поля PostgrestError: message, details, hint, code
+    const parts = [];
+    if (error.message) parts.push(error.message);
+    if (error.details) parts.push(error.details);
+    if (error.hint) parts.push(error.hint);
+    
+    if (parts.length > 0) return parts.join(' | ');
+    
+    try {
+      return JSON.stringify(error);
+    } catch (e) {
+      return String(error);
+    }
+  };
+
   useEffect(() => {
     if (!isAdmin) {
-      // Для сотрудников контакт "Администрация" (виртуальный пул)
       setSelectedContact({
         id: ADMIN_POOL_ID,
         name: 'АДМИНИСТРАЦИЯ ФОНДА',
@@ -47,13 +65,10 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
     }
   }, [isAdmin]);
 
-  // 2. Получение списка активных диалогов (только для админов)
   const fetchActiveConversations = async () => {
     if (!isSupabaseConfigured() || !isAdmin) return;
     setIsLoading(true);
-    
     try {
-      // Собираем всех отправителей, которые писали в пул
       const { data: conversationData, error } = await supabase!
         .from('messages')
         .select('sender_id')
@@ -61,56 +76,43 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
 
       if (error) throw error;
 
-      // Fix: Ensure conversationData is treated as an array of objects with sender_id and explicitly cast to string array
-      // to avoid 'unknown' inference in the for loop below.
       const uniqueSenderIds: string[] = Array.from(new Set((conversationData || []).map((m: any) => m.sender_id as string)));
-      
       const conversationUsers: StoredUser[] = [];
       for (const id of uniqueSenderIds) {
-        // Пропускаем админов в списке контактов админа
         const user = await authService.getUserById(id);
         if (user && user.clearance < 5) conversationUsers.push(user);
       }
-      
       setActiveConversations(conversationUsers);
-    } catch (e) {
-      console.error("Error fetching conversations:", e);
+    } catch (e: any) {
+      console.error("Fetch Convs Error:", formatError(e));
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 3. Загрузка сообщений и Realtime-подписка
   useEffect(() => {
     if (!selectedContact || !isSupabaseConfigured()) return;
 
     const fetchHistory = async () => {
       let query = supabase!.from('messages').select('*');
-      
       if (!isAdmin) {
-        // Сотрудник видит: свои сообщения в пул ИЛИ любые ответы ему лично
         query = query.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${ADMIN_POOL_ID}),receiver_id.eq.${currentUser.id}`);
       } else {
-        // Админ видит: сообщения этого сотрудника в пул ИЛИ ответы ЛЮБОГО админа этому сотруднику
         query = query.or(`and(sender_id.eq.${selectedContact.id},receiver_id.eq.${ADMIN_POOL_ID}),receiver_id.eq.${selectedContact.id}`);
       }
-
       const { data, error } = await query.order('created_at', { ascending: true });
-      if (!error && data) {
-        setMessages(data);
-      }
+      if (!error && data) setMessages(data);
     };
 
     fetchHistory();
 
     const channel = supabase!
-      .channel(`chat_sync_${currentUser.id}`)
+      .channel(`chat_sync_${currentUser.id}_${selectedContact.id}`)
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'messages' }, 
         (payload) => {
           const newMsg = payload.new as Message;
           
-          // Проверка релевантности сообщения текущему чату
           const relevantForStaff = !isAdmin && (
             (newMsg.sender_id === currentUser.id && newMsg.receiver_id === ADMIN_POOL_ID) || 
             (newMsg.receiver_id === currentUser.id)
@@ -123,12 +125,13 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
 
           if (relevantForStaff || relevantForAdmin) {
             setMessages(prev => {
-              // Ищем оптимистичное сообщение для замены, чтобы не было мерцания
-              const isDuplicate = prev.find(m => m.id === newMsg.id);
-              if (isDuplicate) return prev;
+              if (prev.find(m => m.id === newMsg.id)) return prev;
 
-              // Проверяем, не является ли это "нашим" сообщением, которое мы уже добавили оптимистично
-              const optimisticMatch = prev.find(m => m.id.startsWith('temp-') && m.text === newMsg.text && m.sender_id === newMsg.sender_id);
+              const optimisticMatch = prev.find(m => 
+                m.id.startsWith('temp-') && 
+                m.text === newMsg.text && 
+                m.sender_id === newMsg.sender_id
+              );
               
               if (optimisticMatch) {
                 return prev.map(m => m.id === optimisticMatch.id ? newMsg : m);
@@ -138,7 +141,6 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
             });
           }
 
-          // Обновление списка контактов для админов
           if (isAdmin && newMsg.receiver_id === ADMIN_POOL_ID) {
              fetchActiveConversations();
           }
@@ -150,7 +152,6 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
   }, [selectedContact, currentUser.id, isAdmin]);
 
   useEffect(() => {
-    // Плавная прокрутка вниз при новых сообщениях
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' });
     }
@@ -161,10 +162,10 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
     const text = inputText.trim();
     if (!text || !selectedContact || !isSupabaseConfigured()) return;
 
+    setErrorInfo(null);
     const receiverId = !isAdmin ? ADMIN_POOL_ID : selectedContact.id;
     setInputText('');
 
-    // Оптимистичное обновление UI
     const tempId = 'temp-' + Date.now();
     const optimisticMsg: Message = {
       id: tempId,
@@ -176,28 +177,37 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
     
     setMessages(prev => [...prev, optimisticMsg]);
 
-    // Отправка на сервер
-    const { data, error } = await supabase!.from('messages').insert([
-      {
-        sender_id: currentUser.id,
-        receiver_id: receiverId,
-        text: text
-      }
-    ]).select();
+    try {
+      const { data, error } = await supabase!.from('messages').insert([
+        {
+          sender_id: currentUser.id,
+          receiver_id: receiverId,
+          text: text
+        }
+      ]).select();
 
-    if (error) {
-      console.error("Send Error:", error);
-      // Удаляем временное сообщение при ошибке, чтобы не вводить в заблуждение
+      if (error) {
+        const errorString = formatError(error);
+        const code = error.code ? `[${error.code}] ` : "";
+        setErrorInfo(`ОШИБКА: ${code}${errorString.toUpperCase()}`);
+        
+        // Логируем ошибку как строку JSON для надежности отображения в консоли
+        console.error("Detailed DB Error:", JSON.stringify(error, null, 2));
+        
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+      } else if (data && data[0]) {
+        setMessages(prev => prev.map(m => m.id === tempId ? data[0] : m));
+      }
+    } catch (err: any) {
+      const criticalMsg = formatError(err);
+      setErrorInfo(`КРИТИЧЕСКИЙ СБОЙ: ${criticalMsg.toUpperCase()}`);
+      console.error("Critical Send Error:", criticalMsg);
       setMessages(prev => prev.filter(m => m.id !== tempId));
-    } else if (data && data[0]) {
-      // Сразу заменяем временный ID реальным из БД
-      setMessages(prev => prev.map(m => m.id === tempId ? data[0] : m));
     }
   };
 
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)] bg-scp-panel border border-gray-800 font-mono animate-in fade-in duration-500 shadow-2xl">
-      {/* Header */}
       <div className="p-4 border-b border-gray-800 bg-black/60 flex justify-between items-center backdrop-blur-md">
         <div className="flex items-center gap-3">
           {isAdmin && view === 'chat' && (
@@ -211,6 +221,11 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
           </h2>
         </div>
         <div className="flex items-center gap-4">
+           {errorInfo && (
+             <div className="text-[10px] text-red-500 flex items-center gap-1 animate-pulse border border-red-900/50 px-2 py-1 bg-red-950/20 max-w-[300px] overflow-hidden">
+               <AlertCircle size={12} className="shrink-0" /> <span className="truncate">{errorInfo}</span>
+             </div>
+           )}
            <div className="text-[10px] text-green-500 flex items-center gap-2 border border-green-900/50 px-2 py-1 bg-green-950/20">
              <Lock size={12} className="animate-pulse" /> ШИФРОВАНИЕ: АКТИВНО
            </div>
@@ -218,7 +233,6 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
       </div>
 
       <div className="flex-1 overflow-hidden flex">
-        {/* Панель диалогов (для админов) */}
         {isAdmin && (view === 'contacts' || window.innerWidth > 768) && (
           <div className={`${view === 'chat' ? 'hidden md:flex' : 'flex'} w-full md:w-80 flex-col border-r border-gray-800 bg-black/40 overflow-y-auto`}>
             <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-black/60">
@@ -254,10 +268,8 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
           </div>
         )}
 
-        {/* Область чата */}
         {view === 'chat' && selectedContact && (
           <div className="flex-1 flex flex-col bg-black/30 relative">
-            {/* Эффект старого монитора */}
             <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[linear-gradient(transparent_50%,rgba(0,0,0,1)_50%)] bg-[length:100%_4px] z-10"></div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
@@ -270,8 +282,8 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
               
               {messages.map((msg, idx) => {
                 const isMe = msg.sender_id === currentUser.id;
-                // Определяем имя отправителя
                 let senderLabel = isMe ? 'ВЫ' : (isAdmin ? 'СОТРУДНИК' : 'АДМИНИСТРАЦИЯ');
+                const isTemp = msg.id.startsWith('temp-');
                 
                 return (
                   <div key={msg.id || idx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
@@ -279,7 +291,7 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
                       isMe 
                         ? 'border-gray-700 bg-gray-900/80 text-gray-200' 
                         : 'border-scp-terminal/30 bg-scp-terminal/5 text-scp-terminal'
-                    }`}>
+                    } ${isTemp ? 'opacity-50 border-dashed animate-pulse' : ''}`}>
                       <div className="text-[8px] opacity-40 mb-2 flex justify-between gap-6 font-mono border-b border-white/5 pb-1">
                         <span className="font-bold">{senderLabel}</span>
                         <span>{new Date(msg.created_at).toLocaleTimeString()}</span>
