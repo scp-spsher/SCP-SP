@@ -12,6 +12,9 @@ import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
 import AdminChat from './components/AdminChat';
 import { authService, StoredUser } from './services/authService';
+import { supabase, isSupabaseConfigured } from './services/supabaseClient';
+
+const ADMIN_POOL_ID = '00000000-0000-0000-0000-000000000000';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
@@ -19,6 +22,7 @@ const App: React.FC = () => {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [simulatedClearance, setSimulatedClearance] = useState<number>(0);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const initApp = async () => {
@@ -45,8 +49,28 @@ const App: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
        setSimulatedClearance(currentUser.isSuperAdmin ? 6 : currentUser.clearance);
+       
+       // Realtime Notifications
+       if (isSupabaseConfigured()) {
+         const channel = supabase
+           .channel('global_messages')
+           .on('postgres_changes', 
+             { event: 'INSERT', schema: 'public', table: 'messages' }, 
+             (payload) => {
+               const newMsg = payload.new;
+               const isForMe = newMsg.receiver_id === currentUser.id;
+               const isForAdminPool = (currentUser.clearance >= 5 && newMsg.receiver_id === ADMIN_POOL_ID);
+               
+               if ((isForMe || isForAdminPool) && currentPage !== 'messages') {
+                 setUnreadCount(prev => prev + 1);
+               }
+             }
+           )
+           .subscribe();
+         return () => { supabase.removeChannel(channel); };
+       }
     }
-  }, [currentUser]);
+  }, [currentUser, currentPage]);
 
   const handleLogin = (user: StoredUser) => {
     setCurrentUser(user);
@@ -81,6 +105,7 @@ const App: React.FC = () => {
 
   const handleNavigate = (page: string) => {
       if (page === 'profile') setViewedUser(null);
+      if (page === 'messages') setUnreadCount(0);
       setCurrentPage(page);
   };
 
@@ -134,6 +159,7 @@ const App: React.FC = () => {
       realEmail={currentUser.email}
       isSuperAdmin={currentUser.isSuperAdmin}
       user={currentUser}
+      unreadMessages={unreadCount}
     >
       {renderContent()}
     </Layout>
