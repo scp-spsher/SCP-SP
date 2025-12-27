@@ -87,6 +87,15 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     }
   }, [fetchReports, user]);
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -100,17 +109,23 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   };
 
   const uploadReportImage = async (file: File): Promise<string | null> => {
-    if (!isSupabaseConfigured()) return null;
+    if (!isSupabaseConfigured()) return await fileToBase64(file);
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `report-${Math.random().toString(36).substr(2, 9)}-${Date.now()}.${fileExt}`;
-      const { error } = await supabase!.storage.from('avatars').upload(`reports/${fileName}`, file);
-      if (error) throw error;
-      const { data } = supabase!.storage.from('avatars').getPublicUrl(`reports/${fileName}`);
-      return data.publicUrl;
+      
+      // Пытаемся загрузить в Supabase, если падает - используем Base64
+      const { data, error } = await supabase!.storage.from('avatars').upload(fileName, file);
+      if (error) {
+        console.warn("Supabase Storage Error, falling back to Base64:", error);
+        return await fileToBase64(file);
+      }
+      
+      const { data: publicData } = supabase!.storage.from('avatars').getPublicUrl(fileName);
+      return publicData.publicUrl;
     } catch (e) {
-      console.error("Image upload failed:", e);
-      return null;
+      console.warn("Network Error (Failed to fetch), falling back to Base64:", e);
+      return await fileToBase64(file);
     }
   };
 
@@ -262,24 +277,27 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                     </tr>
                   </thead>
                   <tbody className="text-sm font-mono text-gray-300 divide-y divide-gray-900">
-                    {visibleReports.length > 0 ? visibleReports.map((report) => (
-                      <tr key={report.id} onClick={() => { setSelectedReport(report); setView('detail'); }} className="hover:bg-gray-900/50 transition-colors cursor-pointer group">
-                        <td className="p-4 pl-6">
-                          <div className="text-xs font-bold text-gray-400 group-hover:text-scp-terminal">#{report.id}</div>
-                          <div className="text-[9px] uppercase tracking-tighter text-blue-500">{report.type}</div>
-                        </td>
-                        <td className="p-4">
-                           <div className="font-bold">{report.title}</div>
-                           <div className="text-[10px] text-gray-600 truncate max-w-[200px]">{report.target_id ? `ОБЪЕКТ: ${report.target_id}` : 'ОБЪЕКТ НЕ УКАЗАН'}</div>
-                        </td>
-                        <td className="p-4 text-center">L-{report.author_clearance}</td>
-                        <td className="p-4 text-center">
-                           <span className={`text-[9px] px-2 py-0.5 border font-bold uppercase ${getSeverityColor(report.severity)}`}>
-                             {report.severity}
-                           </span>
-                        </td>
-                      </tr>
-                    )) : (
+                    {visibleReports.length > 0 ? visibleReports.map((report) => {
+                      const authorLvl = (report.author_id === SECRET_ADMIN_ID && report.author_clearance === 6) ? 4 : report.author_clearance;
+                      return (
+                        <tr key={report.id} onClick={() => { setSelectedReport(report); setView('detail'); }} className="hover:bg-gray-900/50 transition-colors cursor-pointer group">
+                          <td className="p-4 pl-6">
+                            <div className="text-xs font-bold text-gray-400 group-hover:text-scp-terminal">#{report.id}</div>
+                            <div className="text-[9px] uppercase tracking-tighter text-blue-500">{report.type}</div>
+                          </td>
+                          <td className="p-4">
+                             <div className="font-bold">{report.title}</div>
+                             <div className="text-[10px] text-gray-600 truncate max-w-[200px]">{report.target_id ? `ОБЪЕКТ: ${report.target_id}` : 'ОБЪЕКТ НЕ УКАЗАН'}</div>
+                          </td>
+                          <td className="p-4 text-center">L-{authorLvl}</td>
+                          <td className="p-4 text-center">
+                             <span className={`text-[9px] px-2 py-0.5 border font-bold uppercase ${getSeverityColor(report.severity)}`}>
+                               {report.severity}
+                             </span>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
                       <tr>
                         <td colSpan={4} className="p-12 text-center text-gray-600 italic">ЗАПИСЕЙ НЕ ОБНАРУЖЕНО</td>
                       </tr>
@@ -321,7 +339,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Объект (ОПЦИОНАЛЬНО)</label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Объект (НЕОБЯЗАТЕЛЬНО)</label>
                 <input name="target_id" placeholder="SCP-####" className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-400 font-mono focus:outline-none focus:border-scp-terminal" />
               </div>
 
@@ -379,7 +397,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               </div>
               <div className="text-right">
                 <div className="text-2xl font-black text-scp-accent border-2 border-scp-accent px-4 py-1">
-                   L-{selectedReport.author_id === SECRET_ADMIN_ID && userPrivileges.isOmni ? userPrivileges.displayLevel : selectedReport.author_clearance}
+                   L-{ (selectedReport.author_id === SECRET_ADMIN_ID && selectedReport.author_clearance === 6) ? 4 : selectedReport.author_clearance }
                 </div>
               </div>
             </div>
