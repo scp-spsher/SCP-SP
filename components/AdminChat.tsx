@@ -26,29 +26,77 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
   const [view, setView] = useState<'contacts' | 'chat'>('contacts');
   const [isLoading, setIsLoading] = useState(false);
   const [errorInfo, setErrorInfo] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Ref-ы для доступа к актуальному состоянию внутри callback-ов Realtime
+  const selectedContactRef = useRef<StoredUser | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = currentUser.clearance >= 5;
-
-  const formatError = (error: any): string => {
-    if (!error) return "НЕИЗВЕСТНАЯ ОШИБКА";
-    if (typeof error === 'string') return error;
-    const parts = [];
-    if (error.message) parts.push(error.message);
-    if (error.details) parts.push(error.details);
-    if (error.hint) parts.push(error.hint);
-    if (parts.length > 0) return parts.join(' | ');
-    try { return JSON.stringify(error); } catch (e) { return String(error); }
-  };
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
-  // 1. Первичная настройка
+  // Синхронизируем Ref с состоянием
   useEffect(() => {
+    selectedContactRef.current = selectedContact;
+    if (selectedContact) {
+      fetchHistory(selectedContact.id);
+    }
+  }, [selectedContact]);
+
+  // Загрузка списка диалогов (для админа)
+  const fetchActiveConversations = async () => {
+    if (!isSupabaseConfigured() || !isAdmin) return;
+    try {
+      const { data, error } = await supabase!
+        .from('messages')
+        .select('sender_id, created_at')
+        .eq('receiver_id', ADMIN_POOL_ID)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const ids = Array.from(new Set((data || []).map((m: any) => m.sender_id)));
+      const users: StoredUser[] = [];
+      for (const id of ids) {
+        const u = await authService.getUserById(id as string);
+        if (u && u.clearance < 5) users.push(u);
+      }
+      setActiveConversations(users);
+    } catch (e) {
+      console.error("Contacts Load Error", e);
+    }
+  };
+
+  // Загрузка истории конкретного чата
+  const fetchHistory = async (contactId: string) => {
+    if (!isSupabaseConfigured()) return;
+    setIsLoading(true);
+    let query = supabase!.from('messages').select('*');
+    
     if (!isAdmin) {
+      // Логика для сотрудника: мои сообщения в пул или ответы мне
+      query = query.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${ADMIN_POOL_ID}),receiver_id.eq.${currentUser.id}`);
+    } else {
+      // Логика для админа: сообщения от конкретного сотрудника в пул или ответы ему
+      query = query.or(`and(sender_id.eq.${contactId},receiver_id.eq.${ADMIN_POOL_ID}),receiver_id.eq.${contactId}`);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: true });
+    if (!error && data) {
+      setMessages(data);
+      setTimeout(() => scrollToBottom('auto'), 50);
+    }
+    setIsLoading(false);
+  };
+
+  // ЕДИНАЯ ПОДПИСКА REALTIME (на весь жизненный цикл компонента)
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+
+    if (!isAdmin) {
+      // Если не админ, сразу устанавливаем контакт с "Администрацией"
       setSelectedContact({
         id: ADMIN_POOL_ID,
         name: 'АДМИНИСТРАЦИЯ ФОНДА',
@@ -60,92 +108,37 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
     } else {
       fetchActiveConversations();
     }
-  }, [isAdmin]);
 
-  // 2. Получение списка контактов для админа
-  const fetchActiveConversations = async () => {
-    if (!isSupabaseConfigured() || !isAdmin) return;
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase!
-        .from('messages')
-        .select('sender_id')
-        .eq('receiver_id', ADMIN_POOL_ID);
-
-      if (error) throw error;
-
-      const ids = Array.from(new Set((data || []).map((m: any) => m.sender_id)));
-      const users: StoredUser[] = [];
-      for (const id of ids) {
-        // Fix: Explicitly cast id to string to satisfy authService.getUserById parameter type requirements
-        const u = await authService.getUserById(id as string);
-        if (u && u.clearance < 5) users.push(u);
-      }
-      setActiveConversations(users);
-    } catch (e: any) {
-      console.error("Contacts Load Error:", formatError(e));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 3. Загрузка истории и Realtime подписка
-  useEffect(() => {
-    if (!selectedContact || !isSupabaseConfigured()) return;
-
-    const fetchHistory = async () => {
-      setIsLoading(true);
-      let query = supabase!.from('messages').select('*');
-      if (!isAdmin) {
-        query = query.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${ADMIN_POOL_ID}),receiver_id.eq.${currentUser.id}`);
-      } else {
-        query = query.or(`and(sender_id.eq.${selectedContact.id},receiver_id.eq.${ADMIN_POOL_ID}),receiver_id.eq.${selectedContact.id}`);
-      }
-      const { data, error } = await query.order('created_at', { ascending: true });
-      if (!error && data) {
-        setMessages(data);
-        setTimeout(() => scrollToBottom('auto'), 100);
-      }
-      setIsLoading(false);
-    };
-
-    fetchHistory();
-
-    // Канал подписки: слушаем ВСЕ изменения в таблице messages
     const channel = supabase!
-      .channel(`chat_realtime_${currentUser.id}_${selectedContact.id}`)
+      .channel('global_secure_comms')
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'messages' }, 
         (payload) => {
           const newMsg = payload.new as Message;
-          
-          // Нормализация ID для сравнения
           const myId = currentUser.id.toLowerCase();
-          const contactId = selectedContact.id.toLowerCase();
+          const poolId = ADMIN_POOL_ID.toLowerCase();
           const senderId = newMsg.sender_id.toLowerCase();
           const receiverId = newMsg.receiver_id.toLowerCase();
-          const poolId = ADMIN_POOL_ID.toLowerCase();
 
-          let isRelevant = false;
+          // Получаем текущий открытый контакт из Ref
+          const activeContact = selectedContactRef.current;
+          const activeContactId = activeContact?.id.toLowerCase();
+
+          let isForCurrentView = false;
 
           if (!isAdmin) {
-            // Если я сотрудник:
-            // 1. Это ответ от админа мне лично
-            // 2. Это подтверждение моего сообщения в пул
-            isRelevant = (receiverId === myId) || (senderId === myId && receiverId === poolId);
-          } else {
-            // Если я админ и смотрю чат сотрудника X:
-            // 1. Это сообщение от сотрудника X в пул
-            // 2. Это сообщение от ЛЮБОГО админа (включая меня) сотруднику X
-            isRelevant = (senderId === contactId && receiverId === poolId) || (receiverId === contactId);
+            // Для сотрудника: сообщение мне или мое подтверждение
+            isForCurrentView = (receiverId === myId) || (senderId === myId && receiverId === poolId);
+          } else if (activeContactId) {
+            // Для админа: сообщение от текущего открытого контакта или ответ ему
+            isForCurrentView = (senderId === activeContactId && receiverId === poolId) || (receiverId === activeContactId);
           }
 
-          if (isRelevant) {
+          if (isForCurrentView) {
             setMessages(prev => {
-              // Предотвращение дубликатов
               if (prev.some(m => m.id === newMsg.id)) return prev;
-
-              // Поиск и замена временного (оптимистичного) сообщения
+              
+              // Маппинг оптимистичных сообщений
               const tempMatch = prev.find(m => 
                 m.id.startsWith('temp-') && 
                 m.text === newMsg.text && 
@@ -155,39 +148,33 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
               if (tempMatch) {
                 return prev.map(m => m.id === tempMatch.id ? newMsg : m);
               }
-
               return [...prev, newMsg];
             });
-            
-            // Прокрутка вниз если сообщение новое
-            setTimeout(() => scrollToBottom(), 50);
+            setTimeout(() => scrollToBottom(), 100);
           }
 
-          // Если сообщение пришло в пул и я админ - обновляем список контактов
+          // Если сообщение пришло в пул, обновляем список диалогов у админов
           if (isAdmin && receiverId === poolId) {
             fetchActiveConversations();
           }
         }
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log("Secure channel established");
-        }
-      });
+      .subscribe();
 
     return () => {
       supabase!.removeChannel(channel);
     };
-  }, [selectedContact?.id, currentUser.id, isAdmin]);
+  }, []);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = inputText.trim();
-    if (!text || !selectedContact || !isSupabaseConfigured()) return;
+    if (!text || !selectedContactRef.current || !isSupabaseConfigured()) return;
 
-    setErrorInfo(null);
-    const receiverId = !isAdmin ? ADMIN_POOL_ID : selectedContact.id;
+    const targetContact = selectedContactRef.current;
+    const receiverId = !isAdmin ? ADMIN_POOL_ID : targetContact.id;
     setInputText('');
+    setErrorInfo(null);
 
     const tempId = 'temp-' + Date.now();
     const optimisticMsg: Message = {
@@ -211,22 +198,20 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
       ]).select();
 
       if (error) {
-        setErrorInfo(`ОШИБКА: ${error.message.toUpperCase()}`);
+        setErrorInfo(`СБОЙ ПЕРЕДАЧИ: ${error.message.toUpperCase()}`);
         setMessages(prev => prev.filter(m => m.id !== tempId));
       } else if (data && data[0]) {
-        // Мы не добавляем сообщение здесь, так как оно придет через Realtime 
-        // или будет заменено в стейте если придет быстрее.
-        // Но для мгновенной реакции заменим ID прямо сейчас:
+        // Заменяем временное сообщение реальным данными из БД
         setMessages(prev => prev.map(m => m.id === tempId ? data[0] : m));
       }
     } catch (err: any) {
-      setErrorInfo(`СБОЙ СЕТИ: ${err.message?.toUpperCase() || "DISCONNECTED"}`);
+      setErrorInfo("ОШИБКА ПОДКЛЮЧЕНИЯ К ТЕРМИНАЛУ");
       setMessages(prev => prev.filter(m => m.id !== tempId));
     }
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)] bg-scp-panel border border-gray-800 font-mono animate-in fade-in duration-500 shadow-2xl relative">
+    <div className="flex flex-col h-[calc(100vh-10rem)] bg-scp-panel border border-gray-800 font-mono animate-in fade-in duration-500 shadow-2xl overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-gray-800 bg-black/60 flex justify-between items-center backdrop-blur-md z-30">
         <div className="flex items-center gap-3">
@@ -246,19 +231,6 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
                <AlertCircle size={12} className="shrink-0" /> <span className="truncate">{errorInfo}</span>
              </div>
            )}
-           <button 
-             onClick={() => {
-                if (isAdmin && view === 'contacts') fetchActiveConversations();
-                else if (selectedContact) {
-                   setMessages([]); // Очистка перед рефрешем
-                   setSelectedContact({...selectedContact}); // Триггер useEffect
-                }
-             }}
-             className="p-2 hover:text-scp-terminal text-gray-600 transition-all active:rotate-180"
-             title="Переподключить канал"
-           >
-              <RefreshCw size={16} className={isLoading ? 'animate-spin text-scp-terminal' : ''} />
-           </button>
            <div className="hidden sm:flex text-[10px] text-green-500 items-center gap-2 border border-green-900/50 px-2 py-1 bg-green-950/20">
              <Lock size={12} className="animate-pulse" /> ШИФРОВАНИЕ: АКТИВНО
            </div>
@@ -273,6 +245,9 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
                <span className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center gap-2">
                  <Users size={12}/> Входящие запросы
                </span>
+               <button onClick={fetchActiveConversations} className="p-1 hover:text-scp-terminal">
+                 <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+               </button>
             </div>
             {activeConversations.length > 0 ? activeConversations.map(contact => (
               <button 
@@ -287,29 +262,25 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
                   <div className="text-sm font-bold text-white uppercase truncate">{contact.name}</div>
                   <div className="text-[9px] text-gray-500 uppercase">L-{contact.clearance} // {contact.id.slice(0, 8)}...</div>
                 </div>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <ArrowLeft size={14} className="rotate-180 text-scp-terminal" />
-                </div>
               </button>
             )) : (
               <div className="p-12 text-center text-gray-700 text-xs italic uppercase tracking-widest">
-                Активных запросов нет
+                Входящих диалогов не обнаружено
               </div>
             )}
           </div>
         )}
 
         {/* Окно чата */}
-        {view === 'chat' && selectedContact ? (
+        {selectedContact ? (
           <div className="flex-1 flex flex-col bg-black/30 relative">
             <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[linear-gradient(transparent_50%,rgba(0,0,0,1)_50%)] bg-[length:100%_4px] z-10"></div>
             
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth scrollbar-hide">
-              <div className="text-center py-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 scroll-smooth scrollbar-hide">
+              <div className="text-center py-4">
                  <div className="inline-block px-4 py-1 border border-gray-800 bg-gray-900/40 text-[9px] text-gray-500 uppercase tracking-[0.3em] font-bold">
-                    Защищенная линия связи установлена
+                    Линия связи {isAdmin ? 'с сотрудником' : 'с администрацией'} установлена
                  </div>
-                 <div className="text-[8px] text-gray-700 mt-2">UUID: {selectedContact.id}</div>
               </div>
               
               {messages.map((msg, idx) => {
@@ -321,21 +292,21 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
                   <div key={msg.id || idx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                     <div className={`max-w-[85%] p-4 border relative ${
                       isMe 
-                        ? 'border-gray-700 bg-gray-900/80 text-gray-200 shadow-lg' 
+                        ? 'border-gray-700 bg-gray-900/80 text-gray-200' 
                         : 'border-scp-terminal/30 bg-scp-terminal/5 text-scp-terminal'
                     } ${isTemp ? 'opacity-50 border-dashed animate-pulse' : ''}`}>
-                      <div className="text-[8px] opacity-40 mb-2 flex justify-between gap-6 font-mono border-b border-white/5 pb-1">
+                      <div className="text-[8px] opacity-40 mb-1 flex justify-between gap-6 font-mono">
                         <span className="font-bold">{senderLabel}</span>
                         <span>{new Date(msg.created_at).toLocaleTimeString()}</span>
                       </div>
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap selection:bg-scp-terminal selection:text-black">
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
                         {msg.text}
                       </p>
                     </div>
                   </div>
                 );
               })}
-              <div ref={messagesEndRef} className="h-4" />
+              <div ref={messagesEndRef} className="h-2" />
             </div>
 
             <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-800 flex gap-2 bg-black/80 relative z-20 backdrop-blur-lg">
@@ -350,19 +321,17 @@ const AdminChat: React.FC<AdminChatProps> = ({ currentUser }) => {
               <button 
                 type="submit" 
                 disabled={!inputText.trim()}
-                className="bg-scp-terminal text-black px-8 hover:bg-white transition-all active:scale-95 disabled:opacity-30 disabled:grayscale"
+                className="bg-scp-terminal text-black px-8 hover:bg-white transition-all active:scale-95 disabled:opacity-30"
               >
                 <Send size={20} />
               </button>
             </form>
           </div>
         ) : (
-          isAdmin && (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-800 bg-black/40">
-               <MessageSquare size={64} className="opacity-10 mb-6" />
-               <p className="tracking-[0.4em] text-[10px] uppercase font-bold">Ожидание выбора терминала для связи</p>
-            </div>
-          )
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-800 bg-black/40">
+             <MessageSquare size={64} className="opacity-10 mb-6" />
+             <p className="tracking-[0.4em] text-[10px] uppercase font-bold text-center px-4">Выберите активный терминал для установления связи</p>
+          </div>
         )}
       </div>
     </div>
