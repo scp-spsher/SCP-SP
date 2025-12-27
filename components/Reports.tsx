@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database, WifiOff, X, ShieldAlert, Crown } from 'lucide-react';
 import { SCPReport, ReportType } from '../types';
 import { StoredUser } from '../services/authService';
@@ -23,6 +23,17 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   
   const hasInitialFetched = useRef(false);
+
+  // Хелпер для определения прав админа (5+ или SuperAdmin)
+  const isAdmin = useMemo(() => {
+    const lvl = Number(effectiveClearance);
+    const realLvl = Number(user.clearance);
+    return lvl >= 5 || realLvl >= 5 || user.isSuperAdmin === true;
+  }, [effectiveClearance, user]);
+
+  const isOmni = useMemo(() => {
+    return Number(effectiveClearance) === 6 || Number(user.clearance) === 6 || user.isSuperAdmin === true;
+  }, [effectiveClearance, user]);
 
   // Загрузка локальных данных
   const loadLocalReports = useCallback(() => {
@@ -146,37 +157,27 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
   };
 
   const executeDeletion = async (reportId: string) => {
-    console.log("[TERMINAL] Инициация удаления объекта:", reportId);
+    console.log("[TERMINAL] Удаление объекта:", reportId);
     
-    // Мгновенно обновляем интерфейс
     const backupReports = [...reports];
     setReports(prev => prev.filter(r => r.id !== reportId));
     setSelectedReport(null);
     setView('list');
     setIsConfirmingDelete(false);
-    setStatusMessage({ text: 'ЗАПРОС НА УДАЛЕНИЕ ПЕРЕДАН...', type: 'success' });
+    setStatusMessage({ text: 'ИЗЪЯТИЕ ЗАПИСИ...', type: 'success' });
 
     try {
       let dbError = null;
-      
-      // 1. Попытка удаления из Supabase
       if (isSupabaseConfigured() && !usingLocalFallback) {
         const { error } = await supabase!
           .from('reports')
           .delete()
           .eq('id', reportId);
-        
         if (error) dbError = error;
       }
 
-      if (dbError) {
-        if (dbError.code === '42501') {
-          throw new Error("БЛОКИРОВКА БД: НЕДОСТАТОЧНО ПРАВ (ПРОВЕРЬТЕ RLS).");
-        }
-        throw dbError;
-      }
+      if (dbError) throw dbError;
 
-      // 2. Очистка локального кэша
       const localRaw = localStorage.getItem(STORAGE_KEY);
       if (localRaw) {
         const local = JSON.parse(localRaw);
@@ -184,28 +185,21 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
       }
 
-      setStatusMessage({ text: 'ЗАПИСЬ УСПЕШНО УДАЛЕНА ИЗ ВСЕХ РЕЕСТРОВ', type: 'success' });
+      setStatusMessage({ text: 'ЗАПИСЬ УДАЛЕНА ИЗ РЕЕСТРА', type: 'success' });
       setTimeout(() => setStatusMessage(null), 3000);
-
     } catch (e: any) {
       console.error("[TERMINAL] Сбой удаления:", e.message);
       setReports(backupReports);
-      setStatusMessage({ text: `ОШИБКА: ${e.message.toUpperCase()}`, type: 'error' });
+      setStatusMessage({ text: `СБОЙ СИСТЕМЫ: ${e.message.toUpperCase()}`, type: 'error' });
     }
   };
 
-  // ФИЛЬТРАЦИЯ ПО УРОВНЮ ДОПУСКА
+  // ФИЛЬТРАЦИЯ
   const visibleReports = reports.filter(r => {
     if (!user) return false;
-    
-    // Автор всегда видит свой отчет
     if (user.id === r.author_id) return true;
-    
-    // OMNI (Уровень 6) видит всё
-    if (effectiveClearance >= 6) return true;
-
-    // Если текущий уровень (в т.ч. симуляция) ниже уровня рапорта - скрываем
-    if (effectiveClearance < r.author_clearance) return false;
+    if (isOmni) return true;
+    if (Number(effectiveClearance) < r.author_clearance) return false;
     
     const query = searchTerm.toLowerCase();
     return r.title.toLowerCase().includes(query) || 
@@ -233,9 +227,19 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
     }
   };
 
-  // ЯВНАЯ ПРОВЕРКА ПРАВ: УРОВЕНЬ 5 И 6 (OMNI)
-  const canDelete = selectedReport && (effectiveClearance >= 5 || user.id === selectedReport.author_id);
-  const isAdminOverriding = selectedReport && effectiveClearance >= 5 && user.id !== selectedReport.author_id;
+  // ПРОВЕРКА ПРАВ НА УДАЛЕНИЕ (Улучшена для хостинга)
+  const canDelete = useMemo(() => {
+    if (!selectedReport) return false;
+    // 1. Автор может удалять всегда
+    if (user.id === selectedReport.author_id) return true;
+    // 2. Админ (5 или 6) может удалять всё
+    return isAdmin;
+  }, [selectedReport, user, isAdmin]);
+
+  const isAdminOverriding = useMemo(() => {
+    if (!selectedReport) return false;
+    return isAdmin && user.id !== selectedReport.author_id;
+  }, [selectedReport, user, isAdmin]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
@@ -300,7 +304,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center gap-4 py-32">
                   <RefreshCw className="animate-spin text-scp-terminal" size={32} />
-                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">Синхронизация данных...</span>
+                  <span className="text-xs font-mono tracking-widest text-gray-500 uppercase">Синхронизация...</span>
                 </div>
               ) : visibleReports.length > 0 ? (
                 <table className="w-full text-left border-collapse">
@@ -452,8 +456,8 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
             <div className="pt-8 border-t border-gray-800">
               {isAdminOverriding && (
                 <div className="mb-4 flex items-center gap-2 text-yellow-500 bg-yellow-950/20 border border-yellow-900/50 p-3 text-[10px] font-bold uppercase tracking-widest animate-pulse">
-                  {effectiveClearance >= 6 ? <Crown size={14} /> : <ShieldAlert size={14} />}
-                  ВНИМАНИЕ: АКТИВИРОВАН РЕЖИМ ПЕРЕОПРЕДЕЛЕНИЯ ({effectiveClearance >= 6 ? 'OMNI ACCESS' : 'COUNCIL O5'})
+                  {isOmni ? <Crown size={14} /> : <ShieldAlert size={14} />}
+                  ВНИМАНИЕ: ПРИВИЛЕГИИ АДМИНИСТРАТОРА ({isOmni ? 'OMNI ACCESS' : 'COUNCIL O5'})
                 </div>
               )}
               
@@ -490,7 +494,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
                 </div>
               ) : (
                 <div className="text-[10px] text-gray-700 font-mono uppercase tracking-widest italic flex items-center gap-2">
-                  <Lock size={12} /> Управление записью ограничено (Доступно автору или Совету О5)
+                  <Lock size={12} /> Управление записью ограничено (Требуется L-5+)
                 </div>
               )}
             </div>
