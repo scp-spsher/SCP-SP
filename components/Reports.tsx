@@ -170,16 +170,17 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
 
     try {
       if (isSupabaseConfigured() && !usingLocalFallback) {
-        // ПРОВЕРКА: Видим ли мы строку перед удалением?
+        // 1. Проверяем наличие записи
         const { data: checkData } = await supabase!
           .from('reports')
           .select('id')
           .eq('id', reportId);
         
         if (!checkData || checkData.length === 0) {
-           console.warn("[TERMINAL] Запись не найдена в базе перед удалением.");
+           console.warn("[TERMINAL] Запись не найдена в БД.");
         }
 
+        // 2. Выполняем удаление с проверкой результата
         const { data, error } = await supabase!
           .from('reports')
           .delete()
@@ -194,13 +195,14 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
           throw error;
         }
 
+        // Если data.length === 0, значит RLS молча отфильтровал запрос
         if (!data || data.length === 0) {
           setRlsErrorDetected(true);
           throw new Error("SILENT FAIL: ПРАВИЛА RLS ИГНОРИРУЮТ ЗАПРОС.");
         }
       }
 
-      // Синхронизация локального хранилища
+      // 3. Синхронизируем локально
       const localRaw = localStorage.getItem(STORAGE_KEY);
       if (localRaw) {
         const local = JSON.parse(localRaw);
@@ -208,7 +210,7 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
       }
       
-      setStatusMessage({ text: 'ЗАПИСЬ УДАЛЕНА ИЗ ВСЕХ РЕЕСТРОВ', type: 'success' });
+      setStatusMessage({ text: 'ЗАПИСЬ УСПЕШНО УНИЧТОЖЕНА', type: 'success' });
       setTimeout(() => setStatusMessage(null), 3000);
 
     } catch (e: any) {
@@ -220,19 +222,28 @@ const Reports: React.FC<ReportsProps> = ({ user, effectiveClearance }) => {
 
   const copyRlsFix = () => {
     const sql = `
--- 1. РАЗРЕШИТЬ ПОИСК ПО ТАБЛИЦЕ ПЕРСОНАЛА (ОБЯЗАТЕЛЬНО ДЛЯ ПОДЗАПРОСОВ)
-DROP POLICY IF EXISTS "Allow users to read own profile" ON public.personnel;
-CREATE POLICY "Allow users to read own profile" ON public.personnel FOR SELECT TO authenticated USING (auth.uid() = id);
+-- 1. ВКЛЮЧИТЬ RLS (ЕСЛИ НЕ ВКЛЮЧЕНО)
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.personnel ENABLE ROW LEVEL SECURITY;
 
--- 2. ПОЛИТИКИ УДАЛЕНИЯ ДЛЯ ТАБЛИЦЫ ОТЧЕТОВ
-DROP POLICY IF EXISTS "Allow authors delete" ON public.reports;
-CREATE POLICY "Allow authors delete" ON public.reports FOR DELETE TO authenticated USING (auth.uid()::text = author_id::text);
+-- 2. УДАЛИТЬ СТАРЫЕ ПОЛИТИКИ
+DROP POLICY IF EXISTS "Personnel_Read_Self" ON public.personnel;
+DROP POLICY IF EXISTS "Reports_Delete_Author" ON public.reports;
+DROP POLICY IF EXISTS "Reports_Delete_Admin" ON public.reports;
 
-DROP POLICY IF EXISTS "Allow admins delete" ON public.reports;
-CREATE POLICY "Allow admins delete" ON public.reports FOR DELETE TO authenticated USING ((SELECT clearance FROM public.personnel WHERE id = auth.uid()) >= 5);
+-- 3. СОЗДАТЬ НОВЫЕ ПОЛИТИКИ
+-- Разрешить чтение своего профиля (необходимо для подзапросов в DELETE)
+CREATE POLICY "Personnel_Read_Self" ON public.personnel FOR SELECT TO authenticated USING (auth.uid() = id);
+
+-- Разрешить авторам удалять свои отчеты
+CREATE POLICY "Reports_Delete_Author" ON public.reports FOR DELETE TO authenticated USING (auth.uid()::text = author_id::text);
+
+-- Разрешить администраторам (L5+) удалять любые отчеты
+CREATE POLICY "Reports_Delete_Admin" ON public.reports FOR DELETE TO authenticated 
+USING ((SELECT clearance FROM public.personnel WHERE id = auth.uid()) >= 5);
     `.trim();
     navigator.clipboard.writeText(sql);
-    alert("Расширенный SQL-скрипт скопирован. Выполните его полностью.");
+    alert("Ультимативный SQL-фикс скопирован. Выполните его полностью.");
   };
 
   const visibleReports = reports.filter(r => {
@@ -284,39 +295,34 @@ CREATE POLICY "Allow admins delete" ON public.reports FOR DELETE TO authenticate
       {rlsErrorDetected && (
         <div className="bg-red-900/30 border-2 border-red-500 p-6 flex flex-col gap-4 animate-in slide-in-from-top-4 shadow-[0_0_30px_rgba(220,38,38,0.2)]">
            <div className="flex items-center gap-3 text-red-500 font-bold uppercase tracking-widest">
-             <AlertTriangle size={24} /> Сбой прав доступа базы данных (RLS)
+             <AlertTriangle size={24} /> Критический сбой политик удаления (RLS)
            </div>
            <p className="text-xs text-gray-300 font-mono leading-relaxed">
-             Даже если вы ввели прошлый код, удаление может не работать, если не разрешено **чтение** таблицы персонала. 
-             Для исправления выполните этот **полный** скрипт (он включает фикс чтения):
+             Вы получили ошибку <strong>SILENT FAIL</strong>. Это означает, что SQL-команда была отправлена, но база данных отклонила её без сообщения об ошибке из-за правил RLS. 
+             Наиболее вероятная причина: в базе не разрешено <strong>чтение</strong> таблицы персонала, из-за чего проверка допуска (L-5) всегда возвращает ложь.
            </p>
            
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[10px] font-mono">
-              <div className="bg-black/50 p-3 border border-gray-700">
-                 <div className="text-gray-500 uppercase mb-1 flex items-center gap-1"><Fingerprint size={10}/> UID пользователя</div>
-                 <div className="text-scp-terminal break-all">{user.id}</div>
-              </div>
-              <div className="bg-black/50 p-3 border border-gray-700">
-                 <div className="text-gray-500 uppercase mb-1">Уровень в системе</div>
-                 <div className="text-white">L-{userPrivileges.level}</div>
-              </div>
-           </div>
-
            <div className="bg-black p-4 border border-gray-700 font-mono text-[9px] text-scp-terminal relative group max-h-48 overflow-y-auto">
-              <div className="mb-2 text-gray-500 italic">-- Выполните этот блок в SQL Editor:</div>
+              <div className="mb-2 text-gray-500 italic">-- Выполните этот блок SQL для очистки и пересоздания прав: --</div>
               <code className="block whitespace-pre-wrap">
--- Фикс доступа к профилю для подзапросов
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Personnel_Read_Self" ON personnel;
 CREATE POLICY "Personnel_Read_Self" ON personnel FOR SELECT USING (auth.uid() = id);
 
--- Фикс удаления отчетов
+DROP POLICY IF EXISTS "Reports_Delete_Author" ON reports;
 CREATE POLICY "Reports_Delete_Author" ON reports FOR DELETE USING (auth.uid()::text = author_id::text);
+
+DROP POLICY IF EXISTS "Reports_Delete_Admin" ON reports;
 CREATE POLICY "Reports_Delete_Admin" ON reports FOR DELETE USING ((SELECT clearance FROM personnel WHERE id = auth.uid()) &gt;= 5);
               </code>
               <button onClick={copyRlsFix} className="absolute right-2 top-2 p-2 bg-gray-800 hover:bg-white hover:text-black transition-colors rounded">
                  <Copy size={14} />
               </button>
            </div>
-           <p className="text-[9px] text-gray-500 italic uppercase">Важно: После выполнения SQL обновите страницу.</p>
+           <div className="flex items-center gap-2 text-[10px] text-gray-400">
+             <Fingerprint size={12} className="text-scp-terminal" />
+             UID сессии: <span className="text-white select-all">{user.id}</span>
+           </div>
         </div>
       )}
 
