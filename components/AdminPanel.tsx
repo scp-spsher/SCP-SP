@@ -1,9 +1,12 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { ShieldAlert, Check, X, RefreshCw, UserCheck, AlertOctagon, FileText, Save, ArrowLeft, Trash2, Briefcase, MapPin, Hash, User, Database, Copy, Terminal } from 'lucide-react';
+import { 
+  ShieldAlert, Check, X, RefreshCw, UserCheck, 
+  AlertOctagon, FileText, Save, ArrowLeft, 
+  Trash2, Database, User, Shield
+} from 'lucide-react';
 import { StoredUser, SESSION_KEY } from '../services/authService';
-// Import SecurityClearance to ensure type safety for user access levels
 import { SecurityClearance } from '../types';
 import { SCPLogo } from './SCPLogo';
 
@@ -22,7 +25,6 @@ interface AdminUser {
   avatar_url?: string;
 }
 
-// Added missing AdminPanelProps interface to fix compilation error
 interface AdminPanelProps {
   currentUser: StoredUser;
   onUserUpdate: (user: StoredUser) => void;
@@ -38,498 +40,426 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [editForm, setEditForm] = useState<AdminUser | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [terminatingId, setTerminatingId] = useState<string | null>(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     setStatusMsg('СИНХРОНИЗАЦИЯ...');
 
     if (isSupabaseConfigured()) {
-        try {
-            const { data, error } = await supabase!
-                .from('personnel')
-                .select('*')
-                .order('registered_at', { ascending: false });
+      try {
+        const { data, error } = await supabase!
+          .from('personnel')
+          .select('*')
+          .order('registered_at', { ascending: false });
 
-            if (error) {
-                console.error("Supabase fetch error:", error);
-                handleLocalFetch();
-                setStatusMsg('РЕЖИМ ОГРАНИЧЕННОЙ ФУНКЦИОНАЛЬНОСТИ');
-            } else {
-                const fetchedUsers = data || [];
-                setUsers(fetchedUsers);
-                setIsLocalMode(false);
-                setStatusMsg('МЕЙНФРЕЙМ: ONLINE');
-                
-                // СИНХРОНИЗАЦИЯ: Обновляем локальное хранилище, чтобы оно в точности соответствовало БД
-                // Это удалит из локального кэша всех, кто был удален в БД напрямую
-                const mappedForLocal: StoredUser[] = fetchedUsers.map(u => ({
-                    id: u.id,
-                    email: u.id, // В данной системе ID часто совпадает с email или является UUID
-                    name: u.name,
-                    password: '***',
-                    clearance: u.clearance,
-                    registeredAt: u.registered_at,
-                    is_approved: u.is_approved,
-                    title: u.title,
-                    department: u.department,
-                    site: u.site,
-                    avatar_url: u.avatar_url
-                }));
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedForLocal));
-            }
-        } catch (e) {
-            console.error("Fetch exception:", e);
-            handleLocalFetch();
-        }
-    } else {
+        if (error) throw error;
+
+        const fetchedUsers = (data || []).map(u => ({
+          ...u,
+          clearance: Number(u.clearance || 0) as SecurityClearance,
+          name: String(u.name || 'Сотрудник')
+        }));
+
+        setUsers(fetchedUsers);
+        setIsLocalMode(false);
+        setStatusMsg('МЕЙНФРЕЙМ: ONLINE');
+        
+        const mappedForLocal = fetchedUsers.map(u => ({
+          id: u.id,
+          email: u.id,
+          name: u.name,
+          clearance: u.clearance,
+          registeredAt: u.registered_at,
+          is_approved: u.is_approved,
+          title: u.title,
+          department: u.department,
+          site: u.site,
+          avatar_url: u.avatar_url
+        }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedForLocal));
+      } catch (e) {
+        console.error("Supabase fetch failed:", e);
         handleLocalFetch();
+      }
+    } else {
+      handleLocalFetch();
     }
-    
     setIsLoading(false);
-  };
+  }, []);
 
   const handleLocalFetch = () => {
-      setIsLocalMode(true);
+    setIsLocalMode(true);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
       try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (raw) {
-              const parsed: StoredUser[] = JSON.parse(raw);
-              const mapped: AdminUser[] = parsed.map(u => ({
-                  id: u.id,
-                  name: u.name,
-                  clearance: u.clearance,
-                  is_approved: u.is_approved || false,
-                  // Fixed property access: StoredUser uses registeredAt instead of registered_at
-                  registered_at: u.registeredAt || new Date().toISOString(),
-                  title: u.title,
-                  department: u.department,
-                  site: u.site,
-                  avatar_url: u.avatar_url
-              }));
-              mapped.sort((a, b) => new Date(b.registered_at).getTime() - new Date(a.registered_at).getTime());
-              setUsers(mapped);
-              setStatusMsg('ЛОКАЛЬНЫЙ РЕЕСТР');
-          } else {
-              setUsers([]);
-              setStatusMsg('РЕЕСТР ПУСТ');
-          }
-      } catch (e) {
-          setStatusMsg('СБОЙ ПАМЯТИ');
+        const parsed: any[] = JSON.parse(raw);
+        setUsers(parsed.map(u => ({
+          ...u,
+          name: String(u.name || 'Сотрудник'),
+          clearance: Number(u.clearance || 0) as SecurityClearance,
+          registered_at: u.registeredAt || u.registered_at
+        })));
+        setStatusMsg('ЛОКАЛЬНЫЙ РЕЕСТР');
+      } catch {
+        setStatusMsg('ОШИБКА ДАННЫХ');
       }
+    } else {
+      setUsers([]);
+      setStatusMsg('РЕЕСТР ПУСТ');
+    }
   };
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
-  const handleOpenDossier = (user: AdminUser) => {
-    setSelectedUser(user);
-    setEditForm({ ...user });
-    setStatusMsg(`ДОСЬЕ: ${user.name}`);
-  };
-
-  const handleCloseDossier = () => {
-    setSelectedUser(null);
-    setEditForm(null);
-    setStatusMsg('');
-  };
-
-  const handleFormChange = (field: keyof AdminUser, value: any) => {
-    if (editForm) {
-      setEditForm({ ...editForm, [field]: value });
+  const handleTerminateUser = async (targetId: string) => {
+    if (targetId === SECRET_ADMIN_ID) {
+      setStatusMsg('ОШИБКА: ОБЪЕКТ ЗАЩИЩЕН О5');
+      setTerminatingId(null);
+      return;
     }
-  };
 
-  const updateLocalUser = (updatedUser: Partial<AdminUser>, id: string) => {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-          const parsed: StoredUser[] = JSON.parse(raw);
-          const idx = parsed.findIndex(u => u.id === id);
-          if (idx !== -1) {
-              parsed[idx] = { 
-                  ...parsed[idx], 
-                  ...updatedUser as any, 
-                  registeredAt: updatedUser.registered_at || parsed[idx].registeredAt || (parsed[idx] as any).registered_at
-              };
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-              return true;
-          }
-      }
-      return false;
-  };
-
-  const handleQuickApprove = async (e: React.MouseEvent, userId: string) => {
-    e.stopPropagation(); 
-    setStatusMsg('ОДОБРЕНИЕ...');
-
-    if (!isLocalMode && isSupabaseConfigured()) {
-        const { error } = await supabase!
-        .from('personnel')
-        .update({ is_approved: true })
-        .eq('id', userId);
-
-        if (error) {
-            updateLocalUser({ is_approved: true }, userId);
-            setStatusMsg('ОДОБРЕНО ЛОКАЛЬНО');
-        } else {
-            setStatusMsg('ПОЛЬЗОВАТЕЛЬ ОДОБРЕН');
-            setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_approved: true } : u));
-            // Синхронизируем локально
-            updateLocalUser({ is_approved: true }, userId);
-        }
-    } else {
-        updateLocalUser({ is_approved: true }, userId);
-        setStatusMsg('ОДОБРЕНО (ЛОКАЛЬНО)');
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_approved: true } : u));
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!editForm || !currentUser) return;
-    setIsSaving(true);
-    setStatusMsg('СОХРАНЕНИЕ...');
-
-    const updates = {
-      name: editForm.name,
-      clearance: editForm.clearance,
-      title: editForm.title,
-      department: editForm.department,
-      site: editForm.site,
-      is_approved: editForm.is_approved,
-      avatar_url: editForm.avatar_url
-    };
-
-    try {
-        if (!isLocalMode && isSupabaseConfigured()) {
-            const { error } = await supabase!
-            .from('personnel')
-            .update(updates)
-            .eq('id', editForm.id);
-
-            if (error) {
-                 updateLocalUser(updates, editForm.id);
-                 setStatusMsg('СОХРАНЕНО ЛОКАЛЬНО');
-            } else {
-                setStatusMsg('ДОСЬЕ ОБНОВЛЕНО');
-                setUsers(prev => prev.map(u => u.id === editForm.id ? { ...u, ...updates } : u));
-                updateLocalUser(updates, editForm.id);
-            }
-        } else {
-            updateLocalUser(updates, editForm.id);
-            setStatusMsg('ДОСЬЕ ОБНОВЛЕНО (ЛОКАЛЬНО)');
-            setUsers(prev => prev.map(u => u.id === editForm.id ? { ...u, ...updates } : u));
-        }
-
-        if (editForm.id === currentUser.id) {
-            const updatedCurrentUser: StoredUser = {
-                ...currentUser,
-                name: updates.name,
-                clearance: updates.clearance as SecurityClearance,
-                title: updates.title,
-                department: updates.department,
-                site: updates.site,
-                is_approved: updates.is_approved,
-                avatar_url: updates.avatar_url || currentUser.avatar_url
-            };
-            localStorage.setItem(SESSION_KEY, JSON.stringify(updatedCurrentUser));
-            if (onUserUpdate) onUserUpdate(updatedCurrentUser);
-        }
-
-        setSelectedUser({ ...editForm });
-    } catch (e) {
-        setStatusMsg('ОШИБКА СОХРАНЕНИЯ');
-    } finally {
-        setIsSaving(false);
-    }
-  };
-
-  const handleTerminateUser = async () => {
-    if (!editForm) return;
-    if (!window.confirm(`ТЕРМИНИРОВАТЬ СОТРУДНИКА ${editForm.name.toUpperCase()}?\nЭТО ДЕЙСТВИЕ НЕОБРАТИМО.`)) return;
-    
     setIsSaving(true);
     setStatusMsg('ТЕРМИНАЦИЯ...');
 
     try {
-        // 1. Пытаемся удалить в Supabase
-        if (!isLocalMode && isSupabaseConfigured()) {
-            const { error } = await supabase!
-                .from('personnel')
-                .delete()
-                .eq('id', editForm.id);
-            
-            if (error) {
-                console.warn("Could not delete from DB, will try local only", error);
-            }
-        }
-
-        // 2. ВСЕГДА удаляем из локального хранилища (даже если БД выдала ошибку)
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-            const parsed: StoredUser[] = JSON.parse(raw);
-            const filtered = parsed.filter(u => u.id !== editForm.id);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-        }
-
-        // 3. Обновляем состояние UI
-        setUsers(prev => prev.filter(u => u.id !== editForm.id));
-        setStatusMsg('СОТРУДНИК УСТРАНЕН');
-        handleCloseDossier();
+      if (!isLocalMode && isSupabaseConfigured()) {
+        const { error } = await supabase!
+          .from('personnel')
+          .delete()
+          .eq('id', targetId);
         
-    } catch (e: any) {
-        console.error("Termination error:", e);
-        setStatusMsg('ОШИБКА ПРИ ТЕРМИНАЦИИ');
+        if (error) throw error;
+      }
+
+      setUsers(prev => prev.filter(u => u.id !== targetId));
+
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: any[] = JSON.parse(raw);
+        const filtered = parsed.filter(u => u.id !== targetId);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      }
+
+      setStatusMsg('ОБЪЕКТ УСТРАНЕН');
+      if (selectedUser?.id === targetId) {
+        setSelectedUser(null);
+        setEditForm(null);
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMsg('СБОЙ СИСТЕМЫ');
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
+      setTerminatingId(null);
     }
   };
 
+  const handleQuickApprove = async (e: React.MouseEvent, userId: string) => {
+    e.stopPropagation();
+    setStatusMsg('ОДОБРЕНИЕ...');
+    try {
+      if (!isLocalMode && isSupabaseConfigured()) {
+        await supabase!.from('personnel').update({ is_approved: true }).eq('id', userId);
+      }
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_approved: true } : u));
+      
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: any[] = JSON.parse(raw);
+        const updated = parsed.map(u => u.id === userId ? { ...u, is_approved: true } : u);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      }
+      
+      setStatusMsg('ДОСТУП РАЗРЕШЕН');
+    } catch {
+      setStatusMsg('ОШИБКА');
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editForm) return;
+    setIsSaving(true);
+    setStatusMsg('СОХРАНЕНИЕ...');
+    
+    // Ensure numeric clearance
+    const sanitizedForm = {
+      ...editForm,
+      clearance: Number(editForm.clearance) as SecurityClearance
+    };
+
+    try {
+      if (!isLocalMode && isSupabaseConfigured()) {
+        const { error } = await supabase!.from('personnel').update(sanitizedForm).eq('id', editForm.id);
+        if (error) throw error;
+      }
+      
+      setUsers(prev => prev.map(u => u.id === editForm.id ? { ...sanitizedForm } : u));
+      
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: any[] = JSON.parse(raw);
+        const updated = parsed.map(u => u.id === editForm.id ? { ...u, ...sanitizedForm, registeredAt: u.registeredAt || sanitizedForm.registered_at } : u);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      }
+
+      setStatusMsg('ОБНОВЛЕНО');
+      setSelectedUser(sanitizedForm);
+
+      // If editing self, update app-wide context
+      if (sanitizedForm.id === currentUser.id) {
+        const updatedSelf: StoredUser = {
+          ...currentUser,
+          name: sanitizedForm.name,
+          clearance: sanitizedForm.clearance,
+          title: sanitizedForm.title,
+          department: sanitizedForm.department,
+          site: sanitizedForm.site,
+          is_approved: sanitizedForm.is_approved,
+          avatar_url: sanitizedForm.avatar_url || currentUser.avatar_url
+        };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(updatedSelf));
+        onUserUpdate(updatedSelf);
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMsg('СБОЙ ЗАПИСИ');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleOpenDossier = (user: AdminUser) => {
+    setSelectedUser(user);
+    setEditForm({ ...user });
+    setTerminatingId(null);
+    setStatusMsg(`ПРОСМОТР: ${user.name}`);
+  };
+
   if (selectedUser && editForm) {
-    const isSecretAdmin = editForm.id === SECRET_ADMIN_ID && editForm.clearance === 6;
+    const isSecretAdmin = editForm.id === SECRET_ADMIN_ID;
 
     return (
-      <div className="flex flex-col h-full gap-6 animate-in slide-in-from-right-4 duration-300">
+      <div className="flex flex-col h-full gap-6 animate-in slide-in-from-right-4 duration-300 font-mono text-scp-text">
         <div className="flex items-center justify-between border-b border-gray-800 pb-4">
-          <div className="flex items-center gap-4">
-            <button onClick={handleCloseDossier} className="hover:text-scp-text transition-colors text-gray-500">
-               <ArrowLeft size={24} />
-            </button>
-            <h2 className="text-2xl font-bold tracking-widest text-scp-text flex items-center gap-3 uppercase">
-               ДОСЬЕ: {selectedUser.name}
-            </h2>
-          </div>
-          <div className="flex items-center gap-4">
-             <span className="text-xs font-mono text-scp-terminal animate-pulse">{statusMsg}</span>
-          </div>
+          <button onClick={() => setSelectedUser(null)} className="flex items-center gap-2 hover:text-white transition-colors py-2 px-4 border border-gray-800 bg-gray-950/50">
+            <ArrowLeft size={18} /> НАЗАД К РЕЕСТРУ
+          </button>
+          <span className="text-xs animate-pulse text-scp-terminal uppercase tracking-widest">{statusMsg}</span>
         </div>
+        
+        <div className="bg-scp-panel border border-gray-800 p-8 overflow-y-auto shadow-2xl relative">
+          <div className="absolute top-10 right-10 opacity-5 pointer-events-none">
+              <SCPLogo className="w-48 h-48" />
+          </div>
 
-        <div className="flex-1 overflow-y-auto bg-scp-panel border border-gray-800 p-8 relative">
-           <div className="absolute top-10 right-10 opacity-5 pointer-events-none">
-              <SCPLogo className="w-56 h-56" />
-           </div>
-
-           <div className="max-w-3xl mx-auto space-y-8 relative z-10">
-              <div className="flex justify-between items-start bg-black/50 p-6 border border-gray-700">
-                 <div className="flex items-center gap-4">
-                    <div className="w-20 h-24 bg-gray-900 border border-gray-600 flex items-center justify-center overflow-hidden">
-                       {editForm.avatar_url ? (
-                          <img src={editForm.avatar_url} className="w-full h-full object-cover grayscale" />
-                       ) : (
-                          <User size={40} className="text-gray-600" />
-                       )}
-                    </div>
-                    <div>
-                       <h3 className="text-xl font-bold text-white mb-1">{editForm.name}</h3>
-                       <div className="text-xs text-gray-500 font-mono mb-2">{editForm.id}</div>
-                       <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 text-[10px] font-bold border uppercase ${editForm.is_approved ? 'border-green-500 text-green-500' : 'border-yellow-500 text-yellow-500'}`}>
-                             {editForm.is_approved ? 'АКТИВЕН' : 'ОЖИДАЕТ'}
-                          </span>
-                       </div>
-                    </div>
-                 </div>
-                 <div className="text-right flex flex-col items-end gap-2">
-                    <button 
-                        onClick={() => onViewProfile && onViewProfile(editForm.id)}
-                        className="text-[10px] font-bold bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1 hover:bg-scp-terminal hover:text-black transition-colors uppercase tracking-widest"
-                    >
-                        Посмотреть ID-карту
-                    </button>
-                    <div>
-                        <label className="text-[10px] text-gray-500 uppercase block mb-1">Допуск</label>
-                        <select 
-                            value={editForm.clearance}
-                            onChange={(e) => handleFormChange('clearance', Number(e.target.value))}
-                            className={`bg-black border ${isSecretAdmin ? 'border-scp-terminal text-scp-terminal' : 'border-scp-accent text-scp-accent'} text-xl font-bold p-2 text-right focus:outline-none`}
-                        >
-                            {isSecretAdmin ? (
-                            <option value={6}>L-4 (MASKED)</option>
-                            ) : (
-                            <>
-                                <option value={0}>L-0 (СТАЖЕР)</option>
-                                <option value={1}>L-1</option>
-                                <option value={2}>L-2</option>
-                                <option value={3}>L-3</option>
-                                <option value={4}>L-4</option>
-                                <option value={5}>L-5</option>
-                                <option value={6}>OMNI</option>
-                            </>
-                            )}
-                        </select>
-                    </div>
-                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                    <label className="text-xs uppercase text-gray-500 tracking-wider">Полное Имя</label>
-                    <input 
-                      type="text" 
-                      value={editForm.name} 
-                      onChange={(e) => handleFormChange('name', e.target.value)}
-                      className="w-full bg-black border border-gray-700 p-3 text-white focus:border-scp-text focus:outline-none font-mono"
-                    />
+          <div className="max-w-2xl mx-auto space-y-8 relative z-10">
+            <div className="flex flex-col md:flex-row gap-8 bg-black/60 p-8 border border-gray-700 shadow-lg">
+               <div className="w-32 h-44 bg-gray-900 border border-gray-600 flex items-center justify-center shrink-0 relative">
+                 {editForm.avatar_url ? <img src={editForm.avatar_url} className="w-full h-full object-cover grayscale" alt="Personnel" /> : <User size={48} className="text-gray-700" />}
+                 <div className="absolute bottom-0 left-0 w-full h-1 bg-scp-terminal/30"></div>
+               </div>
+               <div className="flex-1 space-y-6">
+                 <div>
+                   <label className="text-[9px] text-gray-500 uppercase tracking-widest mb-1 block">Идентификатор субъекта</label>
+                   <input 
+                    className="w-full bg-transparent text-2xl font-black border-b border-gray-800 focus:border-scp-terminal outline-none uppercase tracking-tighter"
+                    value={editForm.name}
+                    onChange={e => setEditForm({...editForm, name: e.target.value})}
+                   />
+                   <div className="text-[10px] text-gray-600 mt-1 font-mono">{editForm.id}</div>
                  </div>
                  
-                 <div className="space-y-2">
-                    <label className="text-xs uppercase text-gray-500 tracking-wider">Должность</label>
-                    <input 
-                      type="text" 
-                      value={editForm.title || ''} 
-                      onChange={(e) => handleFormChange('title', e.target.value)}
-                      className="w-full bg-black border border-gray-700 p-3 text-white focus:border-scp-text focus:outline-none font-mono"
-                    />
+                 <div className="grid grid-cols-2 gap-6">
+                   <div>
+                     <label className="text-[9px] text-gray-500 uppercase tracking-widest mb-1 block">Допуск в системе</label>
+                     <select 
+                      className="bg-black border border-gray-700 p-2 w-full text-scp-accent font-black text-lg focus:outline-none"
+                      value={Number(editForm.clearance)}
+                      onChange={e => setEditForm({...editForm, clearance: Number(e.target.value) as any})}
+                     >
+                       {[0,1,2,3,4,5,6].map(l => <option key={l} value={l}>УРОВЕНЬ {l}</option>)}
+                     </select>
+                   </div>
+                   <div>
+                     <label className="text-[9px] text-gray-500 uppercase tracking-widest mb-1 block">Текущий статус</label>
+                     <button 
+                      onClick={() => setEditForm({...editForm, is_approved: !editForm.is_approved})}
+                      className={`text-[10px] font-black p-2 border-2 w-full transition-colors uppercase tracking-widest ${editForm.is_approved ? 'border-green-600 text-green-500 bg-green-950/10' : 'border-red-900 text-red-500 bg-red-950/10'}`}
+                     >
+                       {editForm.is_approved ? 'АКТИВЕН' : 'ЗАБЛОКИРОВАН'}
+                     </button>
+                   </div>
                  </div>
+               </div>
+            </div>
 
-                 <div className="space-y-2">
-                    <label className="text-xs uppercase text-gray-500 tracking-wider">Отдел</label>
-                    <input 
-                      type="text" 
-                      value={editForm.department || ''} 
-                      onChange={(e) => handleFormChange('department', e.target.value)}
-                      className="w-full bg-black border border-gray-700 p-3 text-white focus:border-scp-text focus:outline-none font-mono"
-                    />
-                 </div>
-
-                 <div className="space-y-2">
-                    <label className="text-xs uppercase text-gray-500 tracking-wider">Местонахождение</label>
-                    <input 
-                      type="text" 
-                      value={editForm.site || ''} 
-                      onChange={(e) => handleFormChange('site', e.target.value)}
-                      className="w-full bg-black border border-gray-700 p-3 text-white focus:border-scp-text focus:outline-none font-mono"
-                    />
-                 </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                 <label className="text-[9px] text-gray-500 uppercase tracking-widest">Должность</label>
+                 <input placeholder="НЕ УКАЗАНО" className="w-full bg-black border border-gray-800 p-3 text-sm focus:border-scp-terminal outline-none" value={editForm.title || ''} onChange={e => setEditForm({...editForm, title: e.target.value})} />
               </div>
-
-              <div className="h-px bg-gray-800 w-full my-6"></div>
-
-              <div className="space-y-4">
-                 <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-3 cursor-pointer p-4 border border-gray-700 bg-black/30 hover:bg-black/50 transition-colors flex-1">
-                       <input 
-                          type="checkbox" 
-                          checked={editForm.is_approved} 
-                          onChange={(e) => handleFormChange('is_approved', e.target.checked)}
-                          className="w-5 h-5 accent-green-500"
-                       />
-                       <span className={`text-sm font-bold ${editForm.is_approved ? 'text-green-500' : 'text-gray-500'}`}>
-                          РАЗРЕШИТЬ ДОСТУП В СИСТЕМУ
-                       </span>
-                    </label>
-                 </div>
+              <div className="space-y-1">
+                 <label className="text-[9px] text-gray-500 uppercase tracking-widest">Отдел / Сектор</label>
+                 <input placeholder="НЕ УКАЗАНО" className="w-full bg-black border border-gray-800 p-3 text-sm focus:border-scp-terminal outline-none" value={editForm.department || ''} onChange={e => setEditForm({...editForm, department: e.target.value})} />
               </div>
+              <div className="space-y-1 md:col-span-2">
+                 <label className="text-[9px] text-gray-500 uppercase tracking-widest">Местоположение (Зона/Сайт)</label>
+                 <input placeholder="НЕ УКАЗАНО" className="w-full bg-black border border-gray-800 p-3 text-sm focus:border-scp-terminal outline-none" value={editForm.site || ''} onChange={e => setEditForm({...editForm, site: e.target.value})} />
+              </div>
+            </div>
 
-              <div className="flex items-center justify-between pt-8">
-                 <button 
-                    onClick={handleTerminateUser}
-                    disabled={isSaving}
-                    className="px-6 py-4 border border-red-900 text-red-500 hover:bg-red-900 hover:text-white transition-all text-xs font-bold uppercase"
-                 >
-                    Терминировать
-                 </button>
-
-                 <div className="flex gap-4">
+            <div className="flex flex-col md:flex-row justify-between pt-8 border-t border-gray-800 gap-4">
+              <div className="relative">
+                {terminatingId === editForm.id ? (
+                  <div className="flex items-center gap-3 bg-red-950/30 border-2 border-red-900 p-3 animate-in slide-in-from-left-2 shadow-lg">
+                    <span className="text-[10px] text-red-500 font-black uppercase tracking-widest">ТЕРМИНИРОВАТЬ?</span>
                     <button 
-                       onClick={handleCloseDossier}
-                       className="px-6 py-4 border border-gray-700 text-gray-400 hover:text-white transition-colors text-xs font-bold uppercase"
+                       onClick={() => handleTerminateUser(editForm.id)} 
+                       className="bg-red-600 text-white px-4 py-2 text-[10px] font-bold hover:bg-white hover:text-black transition-all uppercase"
                     >
-                       Отмена
+                       ПОДТВЕРДИТЬ
                     </button>
-                    <button 
-                       onClick={handleSaveProfile}
-                       disabled={isSaving}
-                       className="flex items-center gap-2 px-8 py-4 bg-scp-terminal text-black hover:bg-white transition-colors text-xs font-bold uppercase"
-                    >
-                       {isSaving ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16} />}
-                       Сохранить Изменения
+                    <button onClick={() => setTerminatingId(null)} className="text-gray-500 hover:text-white p-2">
+                       <X size={16} />
                     </button>
-                 </div>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => setTerminatingId(editForm.id)}
+                    disabled={isSaving || isSecretAdmin}
+                    className="flex items-center gap-2 px-6 py-4 border-2 border-red-900 text-red-500 hover:bg-red-900 hover:text-white transition-all text-xs font-black uppercase tracking-widest disabled:opacity-10"
+                  >
+                    <Trash2 size={16} /> УДАЛИТЬ ИЗ РЕЕСТРА
+                  </button>
+                )}
               </div>
-           </div>
+
+              <div className="flex gap-4">
+                <button 
+                   onClick={() => setSelectedUser(null)}
+                   className="px-6 py-4 border border-gray-700 text-gray-500 hover:text-white transition-all text-xs font-black uppercase tracking-widest"
+                >
+                   ОТМЕНА
+                </button>
+                <button 
+                   onClick={handleSaveProfile}
+                   disabled={isSaving}
+                   className="flex items-center gap-3 px-10 py-4 bg-scp-terminal text-black font-black hover:bg-white transition-all text-xs uppercase shadow-[0_0_20px_rgba(51,255,51,0.2)]"
+                >
+                   {isSaving ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16} />} СОХРАНИТЬ ДАННЫЕ
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full gap-6 animate-in fade-in duration-500">
+    <div className="flex flex-col h-full gap-6 animate-in fade-in duration-500 font-mono">
       <div className="flex items-center justify-between border-b border-gray-800 pb-4">
-        <h2 className="text-2xl font-bold tracking-widest text-scp-text flex items-center gap-3">
-            <UserCheck className="text-scp-accent" /> ПЕРСОНАЛ
+        <h2 className="text-2xl font-bold tracking-[0.2em] text-scp-text flex items-center gap-4 uppercase">
+            <UserCheck className="text-scp-accent" size={28} /> РЕЕСТР ПЕРСОНАЛА
         </h2>
-        <div className="flex items-center gap-4">
-            <span className="text-xs font-mono text-scp-terminal animate-pulse">{statusMsg}</span>
+        <div className="flex items-center gap-6">
+            <span className="text-[10px] font-mono text-scp-terminal animate-pulse uppercase tracking-widest">{statusMsg}</span>
             <button 
                 onClick={fetchUsers} 
-                className="p-2 border border-gray-700 hover:bg-gray-800 text-gray-400"
+                className="p-3 border border-gray-800 hover:bg-gray-900 text-gray-500 hover:text-scp-terminal transition-all"
                 disabled={isLoading}
+                title="Принудительная синхронизация"
             >
-                <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+                <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
             </button>
         </div>
       </div>
 
-      <div className="bg-scp-panel border border-gray-800 flex-1 overflow-hidden flex flex-col">
+      <div className="bg-scp-panel border border-gray-800 flex-1 overflow-hidden flex flex-col shadow-2xl">
         <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
                 <thead>
-                    <tr className="bg-black text-xs uppercase text-gray-500 tracking-wider border-b border-gray-800">
-                        <th className="p-4 pl-6">Сотрудник</th>
-                        <th className="p-4 hidden md:table-cell">Назначение</th>
-                        <th className="p-4 text-center">Допуск</th>
-                        <th className="p-4 text-center">Статус</th>
-                        <th className="p-4 text-right pr-6">Действие</th>
+                    <tr className="bg-black/80 text-[10px] uppercase text-gray-500 tracking-widest border-b border-gray-800">
+                        <th className="p-5 pl-8">Сотрудник / ID</th>
+                        <th className="p-5 hidden md:table-cell">Назначение</th>
+                        <th className="p-5 text-center">Уровень</th>
+                        <th className="p-5 text-center">Статус</th>
+                        <th className="p-5 text-right pr-8">Действия</th>
                     </tr>
                 </thead>
-                <tbody className="text-sm font-mono text-gray-300 divide-y divide-gray-800">
+                <tbody className="text-sm font-mono text-gray-300 divide-y divide-gray-800/50">
                     {users.map((user) => {
-                        const isUserSecretAdmin = user.id === SECRET_ADMIN_ID && user.clearance === 6;
-                        const displayLvl = isUserSecretAdmin ? 4 : user.clearance;
+                        const isSecretAdmin = user.id === SECRET_ADMIN_ID;
+                        const isCurrentTerminating = terminatingId === user.id;
 
                         return (
                         <tr 
                           key={user.id} 
-                          className="hover:bg-gray-900/50 transition-colors group"
+                          className={`hover:bg-white/5 transition-all group ${isCurrentTerminating ? 'bg-red-950/10' : ''}`}
                         >
-                            <td className="p-4 pl-6">
+                            <td className="p-5 pl-8">
                                 <button 
                                     onClick={() => onViewProfile && onViewProfile(user.id)}
-                                    className="font-bold text-white hover:text-scp-terminal transition-colors text-left underline decoration-dotted decoration-gray-800 hover:decoration-scp-terminal"
+                                    className="font-bold text-white hover:text-scp-terminal transition-colors text-left block uppercase tracking-tight"
                                 >
-                                    {user.name}
+                                    {String(user.name)}
                                 </button>
-                                <div className="text-xs text-gray-600 truncate max-w-[200px]">{user.id}</div>
+                                <div className="text-[9px] text-gray-600 font-mono mt-1 opacity-60 tracking-tighter">{String(user.id)}</div>
                             </td>
-                            <td className="p-4 hidden md:table-cell" onClick={() => handleOpenDossier(user)}>
-                                <div className="text-xs text-gray-400">{user.title || 'ВНЕ ШТАТА'}</div>
-                                <div className="text-[10px] text-gray-600 uppercase">{user.site || 'Z-19'}</div>
+                            <td className="p-5 hidden md:table-cell cursor-pointer" onClick={() => handleOpenDossier(user)}>
+                                <div className="text-xs text-gray-400 font-bold uppercase tracking-wide">{String(user.title || 'ВНЕ ШТАТА')}</div>
+                                <div className="text-[9px] text-gray-600 uppercase mt-1 tracking-widest">{String(user.site || 'Z-19')} // {String(user.department || 'GEN')}</div>
                             </td>
-                            <td className="p-4 text-center" onClick={() => handleOpenDossier(user)}>
-                                <span className={`inline-block px-2 py-1 border text-[10px] font-bold ${displayLvl >= 5 ? 'border-yellow-600 text-yellow-500' : 'border-gray-700 text-gray-400'}`}>
-                                   L-{displayLvl}
+                            <td className="p-5 text-center cursor-pointer" onClick={() => handleOpenDossier(user)}>
+                                <span className={`inline-block px-3 py-1 border-2 text-[10px] font-black tracking-widest ${Number(user.clearance) >= 5 ? 'border-yellow-600 text-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.2)]' : 'border-gray-800 text-gray-500'}`}>
+                                   L-{Number(user.clearance)}
                                 </span>
                             </td>
-                            <td className="p-4 text-center" onClick={() => handleOpenDossier(user)}>
+                            <td className="p-5 text-center cursor-pointer" onClick={() => handleOpenDossier(user)}>
                                 {user.is_approved ? (
-                                    <span className="text-green-500 text-[10px] uppercase font-bold">Активен</span>
+                                    <span className="text-green-500 text-[10px] uppercase font-black tracking-widest flex items-center justify-center gap-1">
+                                       <Check size={12} /> АКТИВЕН
+                                    </span>
                                 ) : (
-                                    <span className="text-yellow-500 text-[10px] uppercase font-bold animate-pulse">Ожидает</span>
+                                    <span className="text-yellow-600 text-[10px] uppercase font-black tracking-widest animate-pulse flex items-center justify-center gap-1">
+                                       <AlertOctagon size={12} /> ОЖИДАЕТ
+                                    </span>
                                 )}
                             </td>
-                            <td className="p-4 text-right pr-6">
-                                <div className="flex items-center justify-end gap-3">
-                                    {!user.is_approved ? (
-                                        <button 
-                                            onClick={(e) => handleQuickApprove(e, user.id)}
-                                            className="bg-scp-terminal text-black text-xs font-bold px-3 py-1 hover:bg-green-400 transition-colors"
-                                        >
-                                            APPROVE
-                                        </button>
+                            <td className="p-5 text-right pr-8">
+                                <div className="flex items-center justify-end gap-4">
+                                    {isCurrentTerminating ? (
+                                      <div className="flex items-center gap-2 animate-in slide-in-from-right-2">
+                                         <button onClick={() => handleTerminateUser(user.id)} className="bg-red-600 text-white text-[9px] font-bold px-3 py-1 uppercase shadow-md">Да</button>
+                                         <button onClick={() => setTerminatingId(null)} className="text-gray-500 hover:text-white p-1 transition-colors"><X size={14}/></button>
+                                      </div>
                                     ) : (
-                                       <button onClick={() => handleOpenDossier(user)} className="p-1 hover:text-white transition-colors">
-                                            <FileText size={18} className="text-gray-600 group-hover:text-gray-400" />
-                                       </button>
+                                      <>
+                                        {!user.is_approved ? (
+                                          <button 
+                                              onClick={(e) => handleQuickApprove(e, user.id)}
+                                              className="bg-scp-terminal text-black text-[9px] font-black px-4 py-1 hover:bg-white transition-all uppercase tracking-widest shadow-lg shadow-green-900/20"
+                                          >
+                                              ADMIT
+                                          </button>
+                                        ) : (
+                                           <button onClick={() => handleOpenDossier(user)} className="p-2 text-gray-600 hover:text-scp-terminal transition-all hover:bg-white/10 rounded">
+                                                <FileText size={18} />
+                                           </button>
+                                        )}
+                                        {!isSecretAdmin && (
+                                           <button 
+                                             onClick={(e) => { e.stopPropagation(); setTerminatingId(user.id); }}
+                                             className="p-2 text-gray-600 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100 hover:bg-red-950/20 rounded"
+                                             title="Удалить из реестра"
+                                           >
+                                             <Trash2 size={18} />
+                                           </button>
+                                        )}
+                                      </>
                                     )}
                                 </div>
                             </td>
@@ -539,6 +469,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                 </tbody>
             </table>
         </div>
+        {users.length === 0 && !isLoading && (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-700 py-24 gap-4 opacity-30">
+             <Database size={80} />
+             <p className="tracking-[0.5em] text-xs font-black uppercase">Центральный реестр персонала пуст</p>
+          </div>
+        )}
       </div>
     </div>
   );
