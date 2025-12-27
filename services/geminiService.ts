@@ -1,22 +1,19 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { SCPFile, ObjectClass } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+// Always use the process.env.API_KEY string directly when initializing the GoogleGenAI client instance.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const scpModel = 'gemini-3-flash-preview';
 
 export const generateSCPReport = async (itemNumber: string): Promise<Partial<SCPFile>> => {
-  if (!apiKey) {
-    throw new Error("API Key missing");
-  }
-
   const prompt = `
     Создай вымышленную запись в базе данных Фонда SCP для Объекта №: SCP-${itemNumber}.
     Ответ должен быть валидным JSON-объектом.
     Язык содержания: Русский.
     
-    Запись должна быть креативной, написанной в клиническом стиле и следовать стандартному формату SCP.
+    Запись должна be креативной, написанной в клиническом стиле и следовать стандартному формату SCP.
     
     Обязательные поля:
     - objectClass: Одно из "SAFE", "EUCLID", "KETER", "THAUMIEL".
@@ -44,10 +41,11 @@ export const generateSCPReport = async (itemNumber: string): Promise<Partial<SCP
       }
     });
 
+    // The text property is a getter, do not call as a method.
     const text = response.text;
     if (!text) throw new Error("No response from AI");
     
-    const data = JSON.parse(text);
+    const data = JSON.parse(text.trim());
 
     return {
       itemNumber: `SCP-${itemNumber}`,
@@ -65,8 +63,6 @@ export const generateSCPReport = async (itemNumber: string): Promise<Partial<SCP
 };
 
 export const commandChatStream = async function* (history: { role: string, parts: { text: string }[] }[], newMessage: string) {
-    if (!apiKey) return; // Fail silently or handle upstream
-  
     const chat = ai.chats.create({
       model: scpModel,
       history: history,
@@ -86,6 +82,7 @@ export const commandChatStream = async function* (history: { role: string, parts
     const result = await chat.sendMessageStream({ message: newMessage });
     
     for await (const chunk of result) {
+      // Access chunk.text directly (property getter).
       yield chunk.text;
     }
   };
