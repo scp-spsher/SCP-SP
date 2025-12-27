@@ -14,6 +14,7 @@ import { authService, StoredUser } from './services/authService';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
+  const [viewedUser, setViewedUser] = useState<StoredUser | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [simulatedClearance, setSimulatedClearance] = useState<number>(1);
@@ -54,12 +55,34 @@ const App: React.FC = () => {
   const handleLogout = () => {
     authService.logout();
     setCurrentUser(null);
+    setViewedUser(null);
     setCurrentPage('dashboard');
     setSimulatedClearance(1);
   };
 
   const handleProfileUpdate = (updatedUser: StoredUser) => {
     setCurrentUser(updatedUser);
+  };
+
+  const handleViewProfile = async (userId: string) => {
+      if (currentUser && userId === currentUser.id) {
+          setViewedUser(null);
+          setCurrentPage('profile');
+          return;
+      }
+      
+      const user = await authService.getUserById(userId);
+      if (user) {
+          setViewedUser(user);
+          setCurrentPage('profile');
+      }
+  };
+
+  const handleNavigate = (page: string) => {
+      if (page === 'profile') {
+          setViewedUser(null);
+      }
+      setCurrentPage(page);
   };
 
   if (isLoadingSession) {
@@ -80,12 +103,20 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentPage) {
       case 'dashboard': return <Dashboard currentClearance={simulatedClearance} />;
-      case 'profile': return <Profile user={currentUser} currentClearance={simulatedClearance} onProfileUpdate={handleProfileUpdate} />;
+      case 'profile': return (
+        <Profile 
+          user={viewedUser || currentUser} 
+          currentClearance={viewedUser ? viewedUser.clearance : simulatedClearance} 
+          onProfileUpdate={viewedUser ? undefined : handleProfileUpdate} 
+          onBack={viewedUser ? () => setViewedUser(null) : undefined}
+          isViewingSelf={!viewedUser}
+        />
+      );
       case 'database': return <Database />;
       case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
-      case 'reports': return <Reports user={currentUser} effectiveClearance={simulatedClearance} />;
-      case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} />;
+      case 'reports': return <Reports user={currentUser} effectiveClearance={simulatedClearance} onViewProfile={handleViewProfile} />;
+      case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} onViewProfile={handleViewProfile} />;
       case 'guide': return <Guide />;
       default: return <Dashboard currentClearance={simulatedClearance} />;
     }
@@ -94,7 +125,7 @@ const App: React.FC = () => {
   return (
     <Layout 
       currentPage={currentPage} 
-      onNavigate={setCurrentPage} 
+      onNavigate={handleNavigate} 
       onLogout={handleLogout}
       userClearance={currentUser.clearance} 
       simulatedClearance={simulatedClearance} 
