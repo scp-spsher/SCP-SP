@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Filter, Trash2, Archive, RefreshCw, Lock } from 'lucide-react';
-import { SCPReport, ReportType, SecurityClearance } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { AlertTriangle, Send, FileText, Plus, Shield, Search, Eye, Trash2, Archive, RefreshCw, Lock, CheckCircle2, Database } from 'lucide-react';
+import { SCPReport, ReportType } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { StoredUser, authService } from '../services/authService';
 
@@ -14,28 +14,35 @@ const Reports: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusMessage, setStatusMessage] = useState<{text: string, type: 'error' | 'success'} | null>(null);
   
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
+    if (!currentUser) return;
     setIsLoading(true);
+    
     if (isSupabaseConfigured()) {
       try {
-        // SQL Policy на бэкенде сама отфильтрует то, что нам нельзя видеть,
-        // но для надежности мы запрашиваем всё доступное.
         const { data, error } = await supabase!
           .from('reports')
           .select('*')
           .order('created_at', { ascending: false });
         
         if (error) throw error;
-        setReports(data || []);
-      } catch (e) {
+        
+        if (data) {
+          setReports(data);
+          // Синхронизируем локальное хранилище для оффлайн доступа
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+      } catch (e: any) {
+        console.error("DB Fetch Error:", e);
         loadLocalReports();
       }
     } else {
       loadLocalReports();
     }
     setIsLoading(false);
-  };
+  }, [currentUser]);
 
   const loadLocalReports = () => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -45,14 +52,14 @@ const Reports: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchReports();
-    // Обновляем данные пользователя при входе на страницу
-    const refresh = async () => {
+    // При монтировании обновляем сессию и тянем данные
+    const init = async () => {
       const fresh = await authService.refreshSession();
       if (fresh) setCurrentUser(fresh);
+      fetchReports();
     };
-    refresh();
-  }, []);
+    init();
+  }, [fetchReports]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -66,6 +73,7 @@ const Reports: React.FC = () => {
     e.preventDefault();
     if (!currentUser) return;
     setIsSubmitting(true);
+    setStatusMessage(null);
 
     const newReport: SCPReport = {
       id: `REP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
@@ -81,40 +89,83 @@ const Reports: React.FC = () => {
       is_archived: false
     };
 
-    if (isSupabaseConfigured()) {
-      try {
+    try {
+      if (isSupabaseConfigured()) {
         const { error } = await supabase!.from('reports').insert([newReport]);
-        if (error) throw error;
-      } catch (e) {
+        if (error) {
+          // Если ошибка RLS или отсутствие таблицы - сохраняем локально
+          console.warn("Supabase insert failed, using local fallback", error);
+          saveLocalReport(newReport);
+        }
+      } else {
         saveLocalReport(newReport);
       }
-    } else {
-      saveLocalReport(newReport);
-    }
 
-    setFormData({ title: '', type: 'INCIDENT', severity: 'LOW', content: '', target_id: '' });
-    setView('list');
-    fetchReports();
-    setIsSubmitting(false);
+      // Оптимистичное обновление
+      setReports(prev => [newReport, ...prev]);
+      setStatusMessage({ text: 'РАПОРТ УСПЕШНО ПЕРЕДАН В АРХИВ', type: 'success' });
+      
+      setTimeout(() => {
+        setFormData({ title: '', type: 'INCIDENT', severity: 'LOW', content: '', target_id: '' });
+        setView('list');
+        setStatusMessage(null);
+      }, 1500);
+
+    } catch (err: any) {
+      console.error("Critical report save error:", err);
+      setStatusMessage({ 
+        text: `ОШИБКА: ${err.message || 'СБОЙ СИСТЕМЫ'}`, 
+        type: 'error' 
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const saveLocalReport = (report: SCPReport) => {
     const raw = localStorage.getItem(STORAGE_KEY);
     const existing = raw ? JSON.parse(raw) : [];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([report, ...existing]));
+    const updated = [report, ...existing];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
 
-  // ЛОГИКА ДОСТУПА: Пользователь видит отчет, только если его допуск >= допуска автора отчета
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Удалить отчет из архива?")) return;
+    
+    try {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase!.from('reports').delete().eq('id', id);
+        if (error) throw error;
+      }
+      setReports(prev => prev.filter(r => r.id !== id));
+      
+      // Обновляем локальную копию
+      const localRaw = localStorage.getItem(STORAGE_KEY);
+      if (localRaw) {
+        const local = JSON.parse(localRaw);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(local.filter((r: any) => r.id !== id)));
+      }
+      
+      setView('list');
+      setSelectedReport(null);
+    } catch (e) {
+      alert("ОШИБКА: Недостаточно прав доступа для удаления записи.");
+    }
+  };
+
+  // Фильтруем отчеты: только те, чей author_clearance <= нашего текущего уровня
   const visibleReports = reports.filter(r => {
-    const userLvl = currentUser?.clearance || 1;
+    if (!currentUser) return false;
+    
+    const userLvl = currentUser.clearance || 1;
     const hasAccess = userLvl >= r.author_clearance;
     
     if (!hasAccess) return false;
 
-    const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          r.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          r.author_name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+    const query = searchTerm.toLowerCase();
+    return r.title.toLowerCase().includes(query) || 
+           r.id.toLowerCase().includes(query) ||
+           r.author_name.toLowerCase().includes(query);
   });
 
   const getSeverityColor = (sev: string) => {
@@ -142,12 +193,12 @@ const Reports: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4">
         <div>
           <h2 className="text-2xl font-bold tracking-widest text-scp-text flex items-center gap-3 uppercase">
-            <FileText className="text-scp-accent" /> Архивы рапортов
+            <FileText className="text-scp-accent" /> Реестр отчетности
           </h2>
           <div className="flex items-center gap-2 mt-1">
             <Shield size={12} className="text-scp-terminal" />
             <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-              Ваш допуск: Уровень {currentUser?.clearance || 1} // Доступны файлы уровня {currentUser?.clearance || 1} и ниже
+              АВТОРИЗАЦИЯ: УРОВЕНЬ {currentUser?.clearance || 1} // ДОСТУП К ФАЙЛАМ L-{currentUser?.clearance || 1}
             </p>
           </div>
         </div>
@@ -155,52 +206,62 @@ const Reports: React.FC = () => {
         <div className="flex gap-2">
           {view !== 'list' && (
             <button 
-              onClick={() => setView('list')}
+              onClick={() => { setView('list'); setStatusMessage(null); fetchReports(); }}
               className="px-4 py-2 border border-gray-700 text-gray-400 hover:text-white transition-colors text-xs font-bold uppercase"
             >
               К списку
             </button>
           )}
           <button 
-            onClick={() => setView('create')}
-            className="flex items-center gap-2 px-4 py-2 bg-scp-accent text-white hover:bg-red-700 transition-colors text-xs font-bold uppercase"
+            onClick={() => { setView('create'); setStatusMessage(null); }}
+            className="flex items-center gap-2 px-4 py-2 bg-scp-accent text-white hover:bg-red-700 transition-colors text-xs font-bold uppercase shadow-[0_0_15px_rgba(211,47,47,0.3)]"
           >
-            <Plus size={16} /> Подать рапорт
+            <Plus size={16} /> Создать рапорт
           </button>
         </div>
       </div>
 
-      {view === 'list' && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-          <input 
-            type="text" 
-            placeholder="ПОИСК ПО БАЗЕ ДАННЫХ..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-scp-panel border border-gray-800 p-3 pl-10 text-sm text-scp-terminal focus:border-scp-terminal focus:outline-none font-mono"
-          />
+      {statusMessage && (
+        <div className={`p-4 border font-mono text-xs flex items-center justify-between animate-in slide-in-from-top-2 ${
+          statusMessage.type === 'success' ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-red-900/20 border-red-500 text-red-500'
+        }`}>
+          <div className="flex items-center gap-3">
+            {statusMessage.type === 'success' ? <CheckCircle2 size={16}/> : <AlertTriangle size={16}/>}
+            {statusMessage.text}
+          </div>
+          <button onClick={() => setStatusMessage(null)} className="opacity-50 hover:opacity-100">ИГНОРИРОВАТЬ</button>
         </div>
       )}
 
-      <div className="bg-scp-panel border border-gray-800 min-h-[500px] relative">
+      <div className="bg-scp-panel border border-gray-800 min-h-[500px] relative overflow-hidden flex flex-col">
         {view === 'list' && (
-          <div className="flex flex-col h-full">
-            {isLoading ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-4 py-20">
-                <RefreshCw className="animate-spin text-scp-terminal" size={32} />
-                <span className="text-xs font-mono">ДЕШИФРОВКА ПОТОКА...</span>
-              </div>
-            ) : visibleReports.length > 0 ? (
-              <div className="overflow-x-auto">
+          <>
+            <div className="p-4 border-b border-gray-800 bg-black/30 relative">
+              <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+              <input 
+                type="text" 
+                placeholder="ПОИСК ПО ИДЕНТИФИКАТОРУ, ТЕМЕ ИЛИ ФАМИЛИИ СОТРУДНИКА..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-black border border-gray-800 p-3 pl-10 text-sm text-scp-terminal focus:border-scp-terminal focus:outline-none font-mono"
+              />
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center gap-4 py-32">
+                  <RefreshCw className="animate-spin text-scp-terminal" size={32} />
+                  <span className="text-xs font-mono tracking-widest text-gray-500">СКАНИРОВАНИЕ ЗАЩИЩЕННОГО КАНАЛА...</span>
+                </div>
+              ) : visibleReports.length > 0 ? (
                 <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-black text-[10px] uppercase text-gray-500 tracking-wider border-b border-gray-800">
-                      <th className="p-4 pl-6">Шифр / Тип</th>
-                      <th className="p-4">Заголовок</th>
-                      <th className="p-4">Составитель</th>
+                  <thead className="sticky top-0 bg-black z-10 shadow-md">
+                    <tr className="text-[10px] uppercase text-gray-500 tracking-wider border-b border-gray-800">
+                      <th className="p-4 pl-6">Шифр</th>
+                      <th className="p-4">Тема</th>
+                      <th className="p-4">Сотрудник</th>
                       <th className="p-4 text-center">Допуск</th>
-                      <th className="p-4 text-center">Приоритет</th>
+                      <th className="p-4 text-center">Угроза</th>
                     </tr>
                   </thead>
                   <tbody className="text-sm font-mono text-gray-300 divide-y divide-gray-900">
@@ -211,18 +272,19 @@ const Reports: React.FC = () => {
                         className="hover:bg-gray-900/50 transition-colors cursor-pointer group"
                       >
                         <td className="p-4 pl-6">
-                          <div className="text-xs font-bold group-hover:text-scp-terminal">#{report.id}</div>
-                          <div className="text-[9px] uppercase tracking-tighter text-blue-400">{getTypeLabel(report.type)}</div>
+                          <div className="text-xs font-bold text-gray-400 group-hover:text-scp-terminal transition-colors">#{report.id}</div>
+                          <div className="text-[9px] uppercase tracking-tighter text-blue-500">{getTypeLabel(report.type)}</div>
                         </td>
                         <td className="p-4">
-                          <div className="font-bold text-gray-200 truncate max-w-[250px]">{report.title}</div>
-                          {report.target_id && <div className="text-[10px] text-gray-600">ОБЪЕКТ: {report.target_id}</div>}
+                          <div className="font-bold text-gray-200 truncate max-w-[280px]">{report.title}</div>
+                          {report.target_id && <div className="text-[10px] text-gray-600 font-bold uppercase">Объект: {report.target_id}</div>}
                         </td>
-                        <td className="p-4 text-xs text-gray-400">
-                          {report.author_name}
+                        <td className="p-4">
+                          <div className="text-xs text-gray-400">{report.author_name}</div>
+                          <div className="text-[9px] text-gray-600">ID: {report.author_id.substr(0,8)}</div>
                         </td>
                         <td className="p-4 text-center">
-                          <span className="text-[10px] px-1.5 py-0.5 border border-gray-700 bg-black text-gray-500">L-{report.author_clearance}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 border border-gray-700 bg-black text-gray-400">L-{report.author_clearance}</span>
                         </td>
                         <td className="p-4 text-center">
                           <span className={`text-[9px] px-2 py-0.5 border font-bold uppercase ${getSeverityColor(report.severity)}`}>
@@ -233,23 +295,26 @@ const Reports: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center py-20 text-gray-700 grayscale opacity-40">
-                <Lock size={48} className="mb-4" />
-                <p className="tracking-widest text-xs uppercase">Нет доступных записей для вашего уровня</p>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-32 text-gray-700 grayscale opacity-40">
+                  <Lock size={64} className="mb-4" />
+                  <p className="tracking-[0.3em] text-xs uppercase">Доступных рапортов не обнаружено</p>
+                  <button onClick={fetchReports} className="mt-4 text-[10px] border border-gray-800 px-4 py-2 hover:bg-gray-800">ПЕРЕПОДКЛЮЧИТЬСЯ</button>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {view === 'create' && (
           <div className="p-8 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-            <h3 className="text-xl font-bold text-scp-text mb-6 uppercase tracking-widest border-b border-gray-800 pb-2">Формирование нового рапорта</h3>
+            <h3 className="text-xl font-bold text-scp-text mb-6 uppercase tracking-widest border-b border-gray-800 pb-2 flex items-center gap-2">
+              <Plus size={20} className="text-scp-accent" /> Формирование новой записи
+            </h3>
             <form onSubmit={handleCreateSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Категория события</label>
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Категория</label>
                   <select 
                     value={formData.type}
                     onChange={(e) => setFormData({...formData, type: e.target.value as ReportType})}
@@ -263,51 +328,51 @@ const Reports: React.FC = () => {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Приоритет обработки</label>
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest">Классификация угрозы</label>
                   <select 
                     value={formData.severity}
                     onChange={(e) => setFormData({...formData, severity: e.target.value as any})}
                     className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono"
                   >
                     <option value="LOW">LOW - Плановый</option>
-                    <option value="MEDIUM">MEDIUM - Важный</option>
-                    <option value="HIGH">HIGH - Срочный</option>
-                    <option value="CRITICAL">CRITICAL - Немедленно</option>
+                    <option value="MEDIUM">MEDIUM - Повышенный</option>
+                    <option value="HIGH">HIGH - Критический</option>
+                    <option value="CRITICAL">CRITICAL - Немедленный ответ</option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Краткий заголовок</label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Тема / Заголовок</label>
                 <input 
                   required
                   type="text" 
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
-                  placeholder="Прим: Потеря визуального контакта с объектом..."
+                  placeholder="Прим: Провал протокола визуального наблюдения..."
                   className="w-full bg-black border border-gray-700 p-3 text-sm text-scp-terminal focus:border-scp-terminal focus:outline-none font-mono"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Связанная аномалия (SCP-####)</label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Объект (SCP-####)</label>
                 <input 
                   type="text" 
                   value={formData.target_id}
                   onChange={(e) => setFormData({...formData, target_id: e.target.value})}
-                  placeholder="SCP-001"
+                  placeholder="Укажите номер объекта, если рапорт о нем"
                   className="w-full bg-black border border-gray-700 p-3 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Детальный протокол</label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest">Содержание (Протокольный стиль)</label>
                 <textarea 
                   required
                   rows={8}
                   value={formData.content}
                   onChange={(e) => setFormData({...formData, content: e.target.value})}
-                  placeholder="Опишите хронологию событий, принятые меры и рекомендации..."
+                  placeholder="Детально опишите событие, задействованный персонал и последствия..."
                   className="w-full bg-black border border-gray-700 p-4 text-sm text-gray-300 focus:border-scp-terminal focus:outline-none font-mono leading-relaxed"
                 />
               </div>
@@ -317,7 +382,7 @@ const Reports: React.FC = () => {
                 disabled={isSubmitting}
                 className="w-full bg-scp-accent hover:bg-red-700 text-white font-bold py-4 flex items-center justify-center gap-2 uppercase tracking-widest transition-all disabled:opacity-50"
               >
-                {isSubmitting ? <RefreshCw className="animate-spin" size={18}/> : <><Send size={18} /> Отправить в архив</>}
+                {isSubmitting ? <RefreshCw className="animate-spin" size={18}/> : <><Send size={18} /> Передать рапорт в архив</>}
               </button>
             </form>
           </div>
@@ -349,7 +414,7 @@ const Reports: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="md:col-span-2 space-y-6">
                 <div>
-                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Содержание протокола</h4>
+                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Текст протокола</h4>
                   <div className="text-gray-300 font-mono text-sm leading-relaxed whitespace-pre-wrap bg-black/40 p-6 border border-gray-800/50 shadow-inner">
                     {selectedReport.content}
                   </div>
@@ -359,7 +424,7 @@ const Reports: React.FC = () => {
                   <div className="p-4 border-l-4 border-blue-500 bg-blue-900/10 flex items-center gap-4">
                     <Shield size={24} className="text-blue-500" />
                     <div>
-                      <h4 className="text-[10px] text-blue-400 uppercase font-bold">Объект интереса</h4>
+                      <h4 className="text-[10px] text-blue-400 uppercase font-bold">Связанный объект</h4>
                       <p className="font-mono text-white text-lg">{selectedReport.target_id}</p>
                     </div>
                   </div>
@@ -368,7 +433,7 @@ const Reports: React.FC = () => {
 
               <div className="space-y-6">
                 <div className="p-4 border border-gray-800 bg-black/50">
-                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-3">Сотрудник</h4>
+                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-3">Составитель</h4>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gray-900 border border-gray-700 flex items-center justify-center">
                       <Eye size={20} className="text-gray-600" />
@@ -381,19 +446,32 @@ const Reports: React.FC = () => {
                 </div>
 
                 <div className="p-4 border border-gray-800 bg-black/50 space-y-3">
-                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Верификация</h4>
-                  <div className="text-[9px] text-green-500 font-mono flex items-center gap-2">
+                  <h4 className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Действия</h4>
+                  <div className="text-[9px] text-green-500 font-mono flex items-center gap-2 mb-2">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                    ПОДПИСЬ ПОДТВЕРЖДЕНА
+                    ВЕРИФИКАЦИЯ ПРОЙДЕНА
                   </div>
+                  {currentUser && (currentUser.clearance >= 5 || currentUser.id === selectedReport.author_id) && (
+                    <button 
+                      onClick={() => handleDelete(selectedReport.id)}
+                      className="w-full flex items-center gap-2 p-2 text-[10px] text-red-500 hover:bg-red-900/20 transition-colors uppercase font-bold border border-red-900/30"
+                    >
+                      <Trash2 size={12} /> Удалить рапорт
+                    </button>
+                  )}
                   <button className="w-full flex items-center gap-2 p-2 text-[10px] text-gray-500 hover:text-white hover:bg-gray-800 transition-colors uppercase font-bold">
-                    <Archive size={12} /> Печать в PDF
+                    <Archive size={12} /> Распечатать (PDF)
                   </button>
                 </div>
               </div>
             </div>
           </div>
         )}
+      </div>
+      
+      <div className="flex items-center justify-center gap-4 opacity-20 py-4">
+        <Database size={14} />
+        <span className="text-[8px] uppercase tracking-widest font-mono">End of File // SCPNET Central Registry // Encryption Active</span>
       </div>
     </div>
   );
