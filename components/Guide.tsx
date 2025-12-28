@@ -17,7 +17,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
   
   // Вот тут меняем стили для заглушки (placeholder)
   return (
-    <code className="bg-black border border-gray-700 text-red-500 px-1.5 py-0.5 rounded font-mono text-[0.9em] shadow-[inset_0_0_5px_rgba(255,0,0,0.1)] select-none decoration-red-900/50 underline-offset-4 decoration-dotted underline">
+    <code className="bg-black border border-gray-700 text-white-500 px-1.5 py-0.5 rounded font-mono text-[0.9em] shadow-[inset_0_0_5px_rgba(255,0,0,0.1)] select-none decoration-white-900/50 underline-offset-4 decoration-dotted underline">
       {placeholder}
     </code>
   );
