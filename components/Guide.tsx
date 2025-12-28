@@ -326,9 +326,6 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
     );
   };
 
-    return null;
-  };
-
   const renderClearanceTable = () => {
     return (
       <div className="flex flex-col items-center justify-center py-20 opacity-20 select-none">
