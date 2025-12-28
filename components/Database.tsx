@@ -3,19 +3,6 @@ import { Search, FileText, AlertOctagon, RefreshCw, Lock } from 'lucide-react';
 import { SCPFile, ObjectClass } from '../types';
 import { generateSCPReport } from '../services/geminiService';
 
-// Initial Mock Data
-const INITIAL_DB: SCPFile[] = [
-  {
-    id: '173',
-    itemNumber: 'SCP-173',
-    objectClass: ObjectClass.EUCLID,
-    containmentProcedures: 'SCP-173 должен постоянно находиться в закрытом контейнере. При посещении контейнера персоналом, в него должны входить не менее трёх человек, и дверь должна быть немедленно заперта за ними. Два человека должны постоянно поддерживать зрительный контакт с SCP-173 до тех пор, пока все сотрудники не покинут контейнер и он не будет заперт.',
-    description: 'Перевезен в Зону 19 в 1993 году. Происхождение все еще неизвестно. Изготовлен из бетона и арматуры со следами аэрозольной краски марки Krylon. SCP-173 одушевлен и крайне враждебен. Объект не может двигаться, пока находится в пределах прямой видимости. При работе с SCP-173 ни в коем случае нельзя нарушать зрительный контакт.',
-    isRedacted: false,
-    lastUpdated: new Date().toISOString()
-  }
-];
-
 const Database: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [db, setDb] = useState<SCPFile[]>(INITIAL_DB);
