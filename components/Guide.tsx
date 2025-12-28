@@ -197,7 +197,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
             <div className="flex items-center justify-center gap-4 text-xs text-gray-500 uppercase tracking-widest font-mono">
                <span>Архивный файл: CLS-DOC-9.04</span>
                <span className="w-1 h-1 bg-gray-700 rounded-full"></span>
-               <span>Допуск: <Redact text="Уровень 1+" minLevel={1} placeholder="ЗАСЕКРЕЧЕНО" /></span>
+               <span>Допуск: <Redact text="Уровень 2+" minLevel={2} placeholder="ЗАСЕКРЕЧЕНО" /></span>
             </div>
           </header>
 
@@ -210,7 +210,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
                 <div className="flex gap-3"><span className="text-green-500 font-black">●</span> <span>Если положить объект в коробку, убрать её подальше, и ничего плохого не случится — это <b>Безопасный</b>.</span></div>
                 <div className="flex gap-3"><span className="text-yellow-500 font-black">●</span> <span>Если положить объект в коробку, убрать её подальше, и нельзя заранее сказать, что случится — это <b>Евклид</b>.</span></div>
                 <div className="flex gap-3"><span className="text-red-500 font-black">●</span> <span>Если положить объект в коробку, убрать её подальше, и он с лёгкостью вырвется — это <b>Кетер</b>.</span></div>
-                <div className="flex gap-3"><span className="text-purple-500 font-black">●</span> <span>Если объект и есть коробка — это <Redact text="Таумиэль" minLevel={3} placeholder="[СЕКРЕТНО]" />.</span></div>
+                <div className="flex gap-3"><span className="text-purple-500 font-black">●</span> <span>Если объект и есть коробка — это <Redact text="Таумиэль" minLevel={3} placeholder="[████████]" />.</span></div>
               </div>
             </section>
 
@@ -223,25 +223,37 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
               
               <div className="space-y-8">
                 <div className="space-y-2">
-                  <h3 className="text-green-500 font-black uppercase text-xl flex items-center gap-2">Безопасный (Safe)</h3>
+                  <h3 className="text-white-500 font-black uppercase text-xl flex items-center gap-2">Безопасный (Safe)</h3>
                   <p className="text-sm">
                     Объекты класса «Безопасный» — это аномалии, которые проще всего содержать без последствий. Эти объекты достаточно хорошо изучены для содержания без значительных затрат, либо не проявляют аномального воздействия без определённого внешнего стимула. Назначение аномалии класса «Безопасный» не значит, что работа с ней не несёт угрозы.
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-yellow-500 font-black uppercase text-xl flex items-center gap-2">Евклид (Euclid)</h3>
+                  <h3 className="text-white-500 font-black uppercase text-xl flex items-center gap-2">Евклид (Euclid)</h3>
                   <p className="text-sm">
                     К объектам класса «Евклид» относятся недостаточно изученные или изначально непредсказуемые аномалии. Всем аномалиям, которые можно назвать <Redact text="разумными" minLevel={2} placeholder="[УДАЛЕНО]" />, чаще всего присваивается класс не ниже «Евклида», поскольку объект, наделённый собственной волей, по сути непредсказуем.
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-red-500 font-black uppercase text-xl flex items-center gap-2">Кетер (Keter)</h3>
+                  <h3 className="text-white-500 font-black uppercase text-xl flex items-center gap-2">Кетер (Keter)</h3>
                   <p className="text-sm">
                     Объекты класса «Кетер» — это аномалии, постоянное или надёжное содержание которых тяжело реализуемо. «Кетер» не всегда значит опасность, а скорее то, что объект очень сложно содержать или это требует огромных затрат ресурсов <Redact text="и персонала класса D" minLevel={2} placeholder="[ДАННЫЕ УДАЛЕНЫ]" />.
                   </p>
                 </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-white-500 font-black uppercase text-lg"><Redact text="Таумиэль (Thaumiel)" minLevel={4} placeholder="[ДАННЫЕ УДАЛЕНЫ]" /></h3>
+                  <p className="text-xs">
+                    <Redact 
+                      text="Объекты класса «Таумиэль» применяются Фондом исключительно для содержания других аномалий. Сама информация о существовании таких объектов является секретной и доступна только Совету О5." 
+                      minLevel={4} 
+                      placeholder="[ДАННЫЕ УДАЛЕНЫ]" 
+                    />
+                  </p>
+                </div>
+
               </div>
             </section>
 
@@ -249,17 +261,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
               <h2 className="text-2xl font-black text-white uppercase border-l-4 border-gray-600 pl-4 font-mono">Вторичные классы</h2>
               
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <h3 className="text-purple-500 font-black uppercase text-lg">Таумиэль (Thaumiel)</h3>
-                  <p className="text-xs">
-                    <Redact 
-                      text="Объекты класса «Таумиэль» применяются Фондом исключительно для содержания других аномалий. Сама информация о существовании таких объектов является секретной и доступна только Совету О5." 
-                      minLevel={4} 
-                      placeholder="ОПИСАНИЕ КЛАССА ЗАСЕКРЕЧЕНО ДЛЯ СОТРУДНИКОВ НИЖЕ УРОВНЯ 4." 
-                    />
-                  </p>
-                </div>
-
+                
                 <div className="space-y-2">
                   <h3 className="text-scp-accent font-black uppercase text-lg">Аполлион (Apollyon)</h3>
                   <p className="text-xs">
@@ -272,7 +274,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
                 </div>
 
                 <div className="space-y-2 border-l border-gray-800 pl-4">
-                  <h3 className="text-blue-400 font-black uppercase text-sm italic underline decoration-dotted">Архонт (Archon) / Тикондерога (Ticonderoga)</h3>
+                  <h3 className="text-white-400 font-black uppercase text-sm italic underline decoration-dotted">Архонт (Archon) / Тикондерога (Ticonderoga)</h3>
                   <p className="text-xs text-gray-500">
                     Аномалии, чье содержание теоретически возможно, но Фонд решил не ставить их на содержание по этическим или логистическим соображениям.
                   </p>
@@ -298,20 +300,6 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
                 <div className="p-4 border border-gray-800 bg-black/20">
                   <h4 className="font-bold text-white text-sm mb-1">Ожидает назначения</h4>
                   <p className="text-[10px] text-gray-400 italic leading-relaxed">Временный статус до завершения первичных исследований.</p>
-                </div>
-              </div>
-            </section>
-
-            <section className="space-y-4 pt-10 border-t border-gray-800">
-              <h2 className="text-xl font-black text-white uppercase font-mono flex items-center gap-2"><HelpCircle size={20} className="text-scp-terminal" /> Часто задаваемые вопросы</h2>
-              <div className="space-y-6">
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-gray-300">Что такое класс объекта?</p>
-                  <p className="text-xs text-gray-500">Примерный индикатор того, насколько опасен и сложен в содержании объект.</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-gray-300">Если объект очень опасен, должен ли его класс быть более высоким?</p>
-                  <p className="text-xs text-gray-500">Нет. Класс зависит от сложности содержания, а не от опасности. Кошка-телепорт — это <b>Кетер</b>, а кнопка конца света — <b>Безопасный</b>.</p>
                 </div>
               </div>
             </section>
