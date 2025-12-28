@@ -12,12 +12,13 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
   // Вспомогательная функция для цензуры текста
   const Redact = ({ text, minLevel, placeholder = "[ДАННЫЕ УДАЛЕНЫ]" }: { text: string, minLevel: number, placeholder?: string }) => {
   if (currentClearance >= minLevel) {
-    return <span className="text-scp-terminal font-mono">{text}</span>;
+    // Текст для тех, у кого есть допуск (тоже в стиле кода)
+    return <span className="font-mono text-white underline decoration-gray-600">{text}</span>;
   }
   
-  // Вот тут меняем стили для заглушки (placeholder)
+  // Оформление заглушки под белый "код"
   return (
-    <code className="bg-black border border-gray-700 text-white-500 px-1.5 py-0.5 rounded font-mono text-[0.9em] shadow-[inset_0_0_5px_rgba(255,0,0,0.1)] select-none decoration-white-900/50 underline-offset-4 decoration-dotted underline">
+    <code className="bg-white/5 border border-white/20 text-white px-1.5 py-0.5 rounded font-mono text-[0.85em] tracking-tight select-none">
       {placeholder}
     </code>
   );
