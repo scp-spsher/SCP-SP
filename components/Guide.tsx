@@ -12,9 +12,16 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
   // Вспомогательная функция для цензуры текста
   const Redact = ({ text, minLevel, placeholder = "[ДАННЫЕ УДАЛЕНЫ]" }: { text: string, minLevel: number, placeholder?: string }) => {
     if (currentClearance >= minLevel) {
-      return <span>{text}</span>;
+      return <span className="text-scp-text border-b border-white/5">{text}</span>;
     }
-    return <span className="bg-white/10 text-gray-600 px-1 font-mono select-none" title="Доступ ограничен">{placeholder}</span>;
+    return (
+      <code 
+        className="bg-black border border-gray-800 text-gray-600 px-1.5 py-0.5 rounded font-mono text-[0.85em] select-none cursor-help mx-0.5 inline-block leading-none translate-y-[-1px] shadow-inner" 
+        title={`ДОСТУП ОГРАНИЧЕН: ТРЕБУЕТСЯ УРОВЕНЬ ${minLevel}`}
+      >
+        {placeholder}
+      </code>
+    );
   };
 
   const renderGeneralInfo = () => {
@@ -49,7 +56,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
             <div className="flex items-center justify-center gap-4 text-xs text-gray-500 uppercase tracking-widest font-mono">
                <span>Архивный файл: ADM-01-RU</span>
                <span className="w-1 h-1 bg-gray-700 rounded-full"></span>
-               <span>Статус: <Redact text="Рассекречено" minLevel={2} placeholder="Частично ограничено" /></span>
+               <span>Статус: <Redact text="Рассекречено" minLevel={2} placeholder="ОГРАНИЧЕНО" /></span>
             </div>
           </header>
 
@@ -77,13 +84,13 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
                   <SCPLogo className="w-full h-full grayscale hover:grayscale-0 transition-all duration-700 cursor-crosshair" />
                </div>
                <p className="text-xl font-black uppercase tracking-widest text-white italic text-center">Наша миссия – Обезопасить, Удержать, Сохранить.</p>
-               <p className="text-xs text-gray-500 mt-2 font-mono">— <Redact text="Администратор" minLevel={5} /></p>
+               <p className="text-xs text-gray-500 mt-2 font-mono">— <Redact text="Администратор" minLevel={5} placeholder="ОБЪЕКТ СОВЕТА O5" /></p>
             </div>
 
             <section className="space-y-4">
               <h2 className="text-2xl font-black text-white uppercase border-l-4 border-scp-accent pl-4 font-mono">Описание цели</h2>
               <p>
-                Невидимый и вездесущий, Фонд SCP <Redact text="находится вне пределов чьей-либо юрисдикции. Он наделён соответствующими полномочиями всех основных мировых правительств и имеет задачу сдерживания объектов и явлений, которые ставят под угрозу естественность и нормальность этого мира" minLevel={2} placeholder="[УДАЛЕНО]" />. Подобные аномалии представляют собой значительную угрозу для глобальной безопасности и могут нести как физическую, так и психологическую опасность.
+                Невидимый и вездесущий, Фонд SCP <Redact text="находится вне пределов чьей-либо юрисдикции. Он наделён соответствующими полномочиями всех основных мировых правительств и имеет задачу сдерживания объектов и явлений, которые ставят под угрозу естественность и нормальность этого мира" minLevel={2} placeholder="[ДАННЫЕ УДАЛЕНЫ]" />. Подобные аномалии представляют собой значительную угрозу для глобальной безопасности и могут нести как физическую, так и психологическую опасность.
               </p>
               <p>
                 Фонд действует, чтобы нормы так и оставались нормами, чтобы население Земли могло и дальше жить обычной жизнью, не боясь и не подвергая сомнению своё восприятие окружающего мира, чтобы человечество было защищено от различных внеземных угроз, а также угроз из других измерений и вселенных.
@@ -104,14 +111,14 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
                 <div className="space-y-2">
                   <h3 className="text-blue-500 font-bold uppercase flex items-center gap-2"><Box size={18} /> Удержать</h3>
                   <p className="text-sm">
-                    Фонд содержит аномалии, чтобы не допускать распространения их влияния. Это достигается путём их перемещения, маскировки или <Redact text="демонтажа" minLevel={3} />, а также подавлением или недопущением распространения информации об аномалиях среди широкой общественности.
+                    Фонд содержит аномалии, чтобы не допускать распространения их влияния. Это достигается путём их перемещения, маскировки или <Redact text="демонтажа" minLevel={3} placeholder="УДАЛЕНО" />, а также подавлением или недопущением распространения информации об аномалиях среди широкой общественности.
                   </p>
                 </div>
 
                 <div className="space-y-2">
                   <h3 className="text-scp-accent font-bold uppercase flex items-center gap-2"><ShieldAlert size={18} /> Сохранить</h3>
                   <p className="text-sm">
-                    Фонд защищает человечество от аномальных эффектов, а также сохраняет сами аномалии, пока они не будут полностью поняты или же на их основе не будут разработаны новые научные теории. Фонд также может нейтрализовывать или уничтожать аномалии, но подобные действия применяются лишь в самых крайних случаях, когда аномалия слишком опасна, чтобы её можно было содержать.
+                    Фонд защищает человечество от аномальных эффектов, а также сохраняет сами аномалии, пока они не будут полностью поняты или же на их основе не будут разработаны новые научные теории. Фонд также может <Redact text="нейтрализовывать или уничтожать аномалии" minLevel={3} placeholder="[СЕКРЕТНО]" />, но подобные действия применяются лишь в самых крайних случаях, когда аномалия слишком опасна, чтобы её можно было содержать.
                   </p>
                 </div>
               </div>
@@ -145,7 +152,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
                 Фонд SCP - не единственная организация, которой известно об аномалиях, многие другие группировки пытаются взаимодействовать с аномальными объектами или как-то их использовать. Некоторые такие связанные организации имеют схожие с Фондом цели и могут сотрудничать с ним, но большая часть действует в собственных интересах и чаще всего пытается приспособить аномалии для получения прибыли.
               </p>
               <p className="text-sm">
-                От персонала Фонда требуется проявлять осторожность при взаимодействии с членами подобных группировок, сотрудничество с ними без предварительного согласования с руководством может послужить причиной применения дисциплинарных мер, вплоть до <Redact text="устранения" minLevel={2} placeholder="[УДАЛЕНО]" />.
+                От персонала Фонда требуется проявлять осторожность при взаимодействии с членами подобных группировок, сотрудничество с ними без предварительного согласования с руководством может послужить причиной применения дисциплинарных мер, вплоть до <Redact text="устранения" minLevel={4} placeholder="[ОГРАНИЧЕНО]" />.
               </p>
             </section>
           </article>
