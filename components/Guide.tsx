@@ -13,7 +13,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
   const Redact = ({ text, minLevel, placeholder = "[ДАННЫЕ УДАЛЕНЫ]" }: { text: string, minLevel: number, placeholder?: string }) => {
   if (currentClearance >= minLevel) {
     // Текст для тех, у кого есть допуск (тоже в стиле кода)
-    return <span className="font-mono text-white underline decoration-gray-600">{text}</span>;
+    return <span className="font-mono text-white decoration-gray-600">{text}</span>;
   }
   
   // Оформление заглушки под белый "код"
