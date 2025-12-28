@@ -129,7 +129,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
               <p className="text-sm"><Redact text="С целью выполнения основных задач Фонд регулярно проводит множество тайных операций по всему миру." minLevel={2} placeholder="[ДАННЫЕ УДАЛЕНЫ]" /></p>
               
               <div className="p-4 border border-gray-800 bg-black/40 space-y-3">
-                <h3 className="text-white font-bold uppercase text-sm">Особые условия содержания — "SCP"</h3>
+                <h3 className="text-white font-bold uppercase text-sm">Особые условия содержания — "ОУС"</h3>
                 <p className="text-xs">
                   Фонд обладает обширной базой данных об аномалиях, требующих особых условий содержания, что обычно сокращается как "ОУС". Большая часть этой информации содержит общие сведения об аномальных объектах и описания процедур, требуемых для их безопасного содержания или выполняемых в случае нарушений условий содержания и других подобных событий.
                 </p>
@@ -167,91 +167,25 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
   };
 
   const renderObjectClasses = () => {
-    // УРОВЕНЬ 0
-    if (currentClearance === 0) {
-      return (
-        <div className="animate-in fade-in duration-700">
-          <div className="max-w-4xl mx-auto bg-scp-panel border border-gray-800 p-8 md:p-12 shadow-xl relative overflow-hidden">
-            <header className="border-b border-gray-700 pb-6 mb-8">
-              <h1 className="text-3xl font-bold text-white uppercase tracking-tight mb-2 font-mono">Классы объектов</h1>
-              <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-mono">Версия для общего пользования — Уровень допуска 0</p>
-            </header>
-
-            <article className="space-y-8 text-gray-400 font-sans leading-relaxed text-base">
-              <section className="bg-black/40 border-l-4 border-scp-terminal p-6 space-y-4">
-                <h2 className="text-xl font-bold text-white uppercase font-mono">Условная модель оценки — «правило контейнера»</h2>
-                <p className="italic text-sm">Для быстрых оценок используется простой мысленный эксперимент:</p>
-                <ul className="space-y-4 text-sm font-mono">
-                  <li className="flex gap-3">
-                    <span className="text-green-500 font-black">●</span>
-                    <span>Если объект или ситуация легко изолируется и остаётся стабильной — это <span className="text-green-500 uppercase">низкий уровень риска</span>.</span>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="text-yellow-500 font-black">●</span>
-                    <span>Если результат изоляции заранее трудно предсказать — это <span className="text-yellow-500 uppercase">средний уровень риска</span>.</span>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="text-red-500 font-black">●</span>
-                    <span>Если объект активно противится контролю или выходит за рамки ограничений — это <span className="text-red-500 uppercase">высокий уровень риска</span>.</span>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="text-purple-500 font-black">●</span>
-                    <span>Если объект выполняет функцию управления или контроля над другими факторами — он относится к <span className="text-purple-500 uppercase">специальной категории</span>.</span>
-                  </li>
-                </ul>
-              </section>
-            </article>
+  // УРОВЕНЬ 0 и 1 теперь видят "ДОСТУП ЗАПРЕЩЕН"
+  if (currentClearance <= 1) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 animate-in fade-in duration-700">
+        <div className="p-8 border-2 border-red-900 bg-red-950/10 flex flex-col items-center gap-6 shadow-[0_0_50px_rgba(153,27,27,0.2)]">
+          <Lock size={64} className="text-red-600 animate-pulse" />
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl font-black text-red-500 uppercase tracking-[0.3em]">Доступ запрещен</h2>
+            <p className="text-xs text-gray-500 uppercase tracking-widest font-mono">Требуется уровень допуска 2 или выше</p>
           </div>
+          <div className="h-px w-32 bg-red-900/50"></div>
+          <p className="text-[10px] text-gray-600 text-center max-w-xs uppercase leading-relaxed font-mono">
+            Попытка несанкционированного доступа к реестру классификации зафиксирована. 
+            Информация о нарушении направлена в отдел внутренней безопасности.
+          </p>
         </div>
-      );
-    }
-
-    // УРОВЕНЬ 1
-    if (currentClearance === 1) {
-      return (
-        <div className="animate-in fade-in duration-700">
-          <div className="max-w-4xl mx-auto bg-scp-panel border border-gray-800 p-8 md:p-12 shadow-xl relative overflow-hidden">
-            <header className="border-b border-gray-700 pb-6 mb-8">
-              <h1 className="text-3xl font-bold text-white uppercase tracking-tight mb-2 font-mono">Классы объектов</h1>
-              <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-mono">Версия для служебного пользования — Уровень допуска 1</p>
-            </header>
-
-            <article className="space-y-8 text-gray-400 font-sans leading-relaxed text-base">
-              <section className="bg-black/40 border-l-4 border-scp-terminal p-6 space-y-4 shadow-inner">
-                <h2 className="text-xl font-bold text-white uppercase font-mono flex items-center gap-2">
-                  <Box size={20} className="text-scp-terminal" /> Правило «коробки» — оперативная эвристика
-                </h2>
-                <p className="italic text-xs text-gray-500">Для быстрой предварительной оценки применяется простая мысленная проверка:</p>
-                <ul className="space-y-6 text-sm">
-                  <li className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded bg-green-900/30 border border-green-500 flex items-center justify-center shrink-0 font-bold text-green-500">S</div>
-                    <div>
-                      <p className="text-green-500 font-bold uppercase text-xs mb-1">Безопасный (Safe)</p>
-                      <p className="text-xs leading-relaxed">Если объект можно поместить в контейнер и оставить — без негативных последствий (низкая сложность содержания).</p>
-                    </div>
-                  </li>
-                  <li className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded bg-yellow-900/30 border border-yellow-500 flex items-center justify-center shrink-0 font-bold text-yellow-500">E</div>
-                    <div>
-                      <p className="text-yellow-500 font-bold uppercase text-xs mb-1">Евклид (Euclid)</p>
-                      <p className="text-xs leading-relaxed">Если изоляция возможна, но результат непредсказуем (средняя сложность содержания).</p>
-                    </div>
-                  </li>
-                  <li className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded bg-red-900/30 border border-red-500 flex items-center justify-center shrink-0 font-bold text-red-500">K</div>
-                    <div>
-                      <p className="text-red-500 font-bold uppercase text-xs mb-1">Кетер (Keter)</p>
-                      <p className="text-xs leading-relaxed">Если объект легко выходит из изоляции или активно сопротивляется содержанию (высокая сложность содержания).</p>
-                    </div>
-                  </li>
-                </ul>
-              </section>
-            </article>
-          </div>
-        </div>
-      );
-    }
-
+      </div>
+    );
+  }
     // УРОВЕНЬ 2
     if (currentClearance === 2) {
       return (
