@@ -263,7 +263,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
               <div className="space-y-6">
                 
                 <div className="space-y-2">
-                  <h3 className="text-scp-accent font-black uppercase text-lg">Аполлион (Apollyon)</h3>
+                  <h3 className="text-white-400 font-black uppercase text-lg">Аполлион (Apollyon)</h3>
                   <p className="text-xs">
                     <Redact 
                       text="Объекты класса «Аполлион» являются аномалиями, которые невозможно содержать, и они неминуемо нарушат условия содержания. Обычно связаны с угрозами конца света класса К." 
