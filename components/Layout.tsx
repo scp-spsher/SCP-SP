@@ -61,7 +61,6 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'guide', label: 'ДОКУМЕНТАЦИЯ', icon: BookOpen, minClearance: 0 },
     { id: 'database', label: 'АРХИВ', icon: Database, minClearance: 2 },
     { id: 'reports', label: 'ОТЧЕТЫ', icon: FileText, minClearance: 1 },
-    { id: 'comms', label: 'СПЕЦСВЯЗЬ', icon: MessageSquare, minClearance: 3 },
     { id: 'terminal', label: 'ТЕРМИНАЛ', icon: Terminal, minClearance: 4 },
     { id: 'admin', label: 'ПЕРСОНАЛ', icon: Users, minClearance: 5 },
     { id: 'messages', label: 'СВЯЗЬ С АДМИНИСТРАЦИЕЙ', icon: Mail, minClearance: 0, showBadge: true },
