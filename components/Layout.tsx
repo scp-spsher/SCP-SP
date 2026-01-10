@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { 
   Database, 
@@ -12,7 +13,8 @@ import {
   ChevronDown,
   Users,
   Mail,
-  BookOpen
+  BookOpen,
+  MessageCircle
 } from 'lucide-react';
 import { SCPLogo } from './SCPLogo';
 
@@ -59,8 +61,10 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'dashboard', label: isO5View ? 'ГЛАЗ БОГА' : 'ОБЗОР', icon: isO5View ? Eye : Activity, minClearance: 0 },
     { id: 'profile', label: 'ID КАРТА', icon: UserCircle, minClearance: 0 },
     { id: 'guide', label: 'ДОКУМЕНТАЦИЯ', icon: BookOpen, minClearance: 0 },
+    { id: 'general_chat', label: 'ОБЩИЙ КАНАЛ', icon: MessageCircle, minClearance: 0 },
     { id: 'database', label: 'АРХИВ', icon: Database, minClearance: 2 },
     { id: 'reports', label: 'ОТЧЕТЫ', icon: FileText, minClearance: 1 },
+    { id: 'comms', label: 'СПЕЦСВЯЗЬ', icon: MessageSquare, minClearance: 3 },
     { id: 'terminal', label: 'ТЕРМИНАЛ', icon: Terminal, minClearance: 4 },
     { id: 'admin', label: 'ПЕРСОНАЛ', icon: Users, minClearance: 5 },
     { id: 'messages', label: 'СВЯЗЬ С АДМИНИСТРАЦИЕЙ', icon: Mail, minClearance: 0, showBadge: true },
