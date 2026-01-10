@@ -209,7 +209,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       <div className="bg-scp-panel border border-gray-800 flex flex-col overflow-hidden shadow-lg">
         <div className="p-4 border-b border-gray-800 bg-gray-900/50 flex justify-between items-center">
           <h3 className="text-sm font-bold tracking-widest text-gray-300 flex items-center gap-2 uppercase">
-            <ClipboardList className="text-scp-terminal" size={18} /> ЖУРНАЛ ЗАДАНИЙ И ДИРЕКТИВ
+            <ClipboardList className="text-scp-terminal" size={18} /> ЖУРНАЛ ЗАДАНИЙ
           </h3>
           <div className="flex gap-2">
             <button 
