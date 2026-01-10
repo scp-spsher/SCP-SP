@@ -68,7 +68,7 @@ const Database: React.FC = () => {
     // Добавил min-h-screen, чтобы твой черный экран не схлопывался в полоску
     <div className="flex flex-col min-h-screen h-full gap-6 bg-black p-4 text-gray-200">
       <div className="flex items-center justify-between border-b border-gray-800 pb-4">
-        <h2 className="text-2xl font-bold tracking-widest text-white uppercase">Центральный Архив SCIPNET</h2>
+        <h2 className="text-2xl font-bold tracking-widest text-white uppercase">Центральный Архив SCPNET</h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1">
