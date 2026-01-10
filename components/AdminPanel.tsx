@@ -180,7 +180,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
     const sanitizedForm = {
       ...editForm,
       clearance: Number(editForm.clearance) as SecurityClearance,
-      // Если не ОВБ, очищаем отдел прикрытия
+      // Если не ОВБ, очищаем отдел прикрытия (или ставим равным основному)
       cover_department: editForm.department === 'ОВБ' ? editForm.cover_department : editForm.department
     };
 
@@ -234,7 +234,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
 
   if (selectedUser && editForm) {
     const isSecretAdmin = editForm.id === SECRET_ADMIN_ID;
-    const showCoverDept = editForm.department === 'ОВБ';
+    const isISD = editForm.department === 'ОВБ';
 
     return (
       <div className="flex flex-col h-full gap-6 animate-in slide-in-from-right-4 duration-300 font-mono text-scp-text">
@@ -301,33 +301,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                  <select 
                   className="w-full bg-black border border-gray-800 p-3 text-sm text-white focus:border-scp-terminal outline-none"
                   value={editForm.department || ''}
-                  onChange={e => setEditForm({...editForm, department: e.target.value})}
+                  onChange={e => {
+                    const dept = e.target.value;
+                    setEditForm({
+                      ...editForm, 
+                      department: dept,
+                      cover_department: dept === 'ОВБ' ? (editForm.cover_department || 'Служба Безопасности') : dept
+                    });
+                  }}
                  >
                    <option value="">НЕ УКАЗАНО</option>
                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                  </select>
               </div>
 
-              {showCoverDept && (
+              {isISD && (
                 <div className="space-y-1 md:col-span-2 animate-in fade-in slide-in-from-top-2">
-                   <label className="text-[9px] text-yellow-500 uppercase tracking-widest flex items-center gap-2">
-                     <EyeOff size={10} /> Отдел прикрытия (Легенда)
+                   <label className="text-[9px] text-yellow-500 uppercase tracking-widest flex items-center gap-2 font-black">
+                     <EyeOff size={10} /> Легенда ОВБ (Отдел прикрытия)
                    </label>
                    <select 
                     className="w-full bg-black border border-yellow-900/50 p-3 text-sm text-yellow-500/80 focus:border-yellow-500 outline-none"
                     value={editForm.cover_department || ''}
                     onChange={e => setEditForm({...editForm, cover_department: e.target.value})}
                    >
-                     <option value="">ВЫБЕРИТЕ ЛЕГЕНДУ</option>
                      {DEPARTMENTS.filter(d => d !== 'ОВБ').map(d => <option key={d} value={d}>{d}</option>)}
                    </select>
-                   <p className="text-[8px] text-gray-600 mt-1 uppercase">Данный отдел будет отображаться персоналу с уровнем допуска ниже 5.</p>
+                   <p className="text-[8px] text-gray-600 mt-1 uppercase">Этот отдел будет отображаться всем сотрудникам с допуском ниже 5 уровня.</p>
                 </div>
               )}
 
               <div className="space-y-1 md:col-span-2">
                  <label className="text-[9px] text-gray-500 uppercase tracking-widest">Местоположение (Зона/Сайт)</label>
-                 <input placeholder="НЕ УКАЗАНО" className="w-full bg-black border border-gray-800 p-3 text-sm focus:border-scp-terminal outline-none" value={editForm.site || ''} onChange={e => setEditForm({...editForm, site: e.target.value})} />
+                 <input placeholder="Зона-19" className="w-full bg-black border border-gray-800 p-3 text-sm focus:border-scp-terminal outline-none" value={editForm.site || ''} onChange={e => setEditForm({...editForm, site: e.target.value})} />
               </div>
             </div>
 
@@ -427,15 +433,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                                     className="font-bold text-white hover:text-scp-terminal transition-colors text-left block uppercase tracking-tight flex items-center gap-2"
                                 >
                                     {String(user.name)}
-                                    {/* Fix: Removed invalid 'title' prop from Shield icon */}
-                                    {isISD && <Shield size={10} className="text-red-500" />}
+                                    {isISD && <Shield size={10} className="text-red-500 animate-pulse" />}
                                 </button>
                                 <div className="text-[9px] text-gray-600 font-mono mt-1 opacity-60 tracking-tighter">{String(user.id)}</div>
                             </td>
                             <td className="p-5 hidden md:table-cell cursor-pointer" onClick={() => handleOpenDossier(user)}>
                                 <div className="text-xs text-gray-400 font-bold uppercase tracking-wide">{String(user.title || 'ВНЕ ШТАТА')}</div>
                                 <div className="text-[9px] text-gray-600 uppercase mt-1 tracking-widest">
-                                  {isISD ? <span className="text-red-900 font-black">ОВБ</span> : String(user.department || 'GEN')} // {String(user.site || 'Z-19')}
+                                  {isISD ? <span className="text-red-900 font-black">ОВБ [MASKED]</span> : String(user.department || 'GEN')} // {String(user.site || 'Z-19')}
                                 </div>
                             </td>
                             <td className="p-5 text-center cursor-pointer" onClick={() => handleOpenDossier(user)}>
