@@ -57,6 +57,21 @@ export interface SCPReport {
   image_url?: string;
 }
 
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+
+export interface SCPTask {
+  id: string;
+  title: string;
+  description: string;
+  assigned_to: string; // UUID of personnel
+  assigned_name?: string;
+  created_by: string; // UUID of creator
+  priority: TaskPriority;
+  status: TaskStatus;
+  created_at: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'system' | 'ai';
