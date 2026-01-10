@@ -32,7 +32,7 @@ const incidentData = [
 
 const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) => {
   const [personnelCount, setPersonnelCount] = useState<number | string>(4102);
-  const [dbStatus, setDbStatus] = useState<string>('OFFLINE');
+  const [dbStatus, setDbStatus] = useState<string>('ВНЕ СЕТИ');
   const [tasks, setTasks] = useState<SCPTask[]>([]);
   const [isTasksLoading, setIsTasksLoading] = useState(false);
   
@@ -41,7 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
   const [isNewsLoading, setIsNewsLoading] = useState(false);
   const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
   const [isPublishingNews, setIsPublishingNews] = useState(false);
-  const [newNews, setNewNews] = useState({ title: '', content: '', priority: 'NORMAL' as any });
+  const [newNews, setNewNews] = useState({ title: '', content: '', priority: 'ОБЫЧНЫЙ' as any });
 
   // Tasks Create State
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -50,7 +50,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
     title: '', 
     description: '', 
     assigned_department: DEPARTMENTS[0], 
-    priority: 'MEDIUM' as TaskPriority 
+    priority: 'СРЕДНИЙ' as TaskPriority 
   });
 
   const isHighLevelView = currentClearance >= 5;
@@ -67,7 +67,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
   const fetchDashboardData = async () => {
     try {
       const { count, error } = await supabase!.from('personnel').select('*', { count: 'exact', head: true });
-      if (!error) setDbStatus('ONLINE');
+      if (!error) setDbStatus('ОНЛАЙН');
       if (count !== null) setPersonnelCount(count > 0 ? count : 4102);
     } catch (e) {
       setDbStatus('АВТОНОМНО');
@@ -147,7 +147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
         description: newTask.description,
         assigned_department: newTask.assigned_department,
         priority: newTask.priority,
-        status: 'PENDING',
+        status: 'ОЖИДАЕТ',
         created_by: currentUser.id
       };
 
@@ -157,7 +157,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       }
 
       setIsTaskModalOpen(false);
-      setNewTask({ title: '', description: '', assigned_department: DEPARTMENTS[0], priority: 'MEDIUM' });
+      setNewTask({ title: '', description: '', assigned_department: DEPARTMENTS[0], priority: 'СРЕДНИЙ' });
       fetchTasks();
     } catch (e) {
       alert("ОШИБКА СОЗДАНИЯ ЗАДАНИЯ");
@@ -186,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       }
 
       setIsNewsModalOpen(false);
-      setNewNews({ title: '', content: '', priority: 'NORMAL' });
+      setNewNews({ title: '', content: '', priority: 'ОБЫЧНЫЙ' });
       fetchNews();
     } catch (e: any) {
       alert("ОШИБКА ПУБЛИКАЦИИ: ПРОВЕРЬТЕ НАЛИЧИЕ ТАБЛИЦЫ 'news'");
@@ -199,12 +199,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
     <div className="space-y-6">
       <div className="flex items-center justify-between border-b border-gray-800 pb-4">
         <h2 className={`text-2xl font-bold tracking-widest ${isHighLevelView ? 'text-yellow-500' : 'text-scp-text'} uppercase`}>
-          {isHighLevelView ? 'ГЛАЗ БОГА :: SCPNET DASHBOARD' : 'СТАТУС ЗОНЫ-19'}
+          {isHighLevelView ? 'ГЛАЗ БОГА :: ПАНЕЛЬ УПРАВЛЕНИЯ' : 'СТАТУС ЗОНЫ-19'}
         </h2>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-3 py-1 border border-scp-accent/30 bg-scp-accent/5 text-scp-accent rounded">
             <ShieldAlert size={16} className="animate-pulse" />
-            <span className="text-[10px] font-black uppercase font-mono">STATUS: SECURE</span>
+            <span className="text-[10px] font-black uppercase font-mono">СТАТУС: БЕЗОПАСНО</span>
           </div>
           <div className="text-xs font-bold text-scp-terminal border border-gray-800 px-3 py-1">КАНАЛ: {dbStatus}</div>
         </div>
@@ -216,7 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
             <AlertTriangle size={48} className="text-scp-accent" />
           </div>
           <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">УРОВЕНЬ DEFCON</h3>
-          <div className="text-3xl font-bold text-scp-accent">LEVEL 4</div>
+          <div className="text-3xl font-bold text-scp-accent">УРОВЕНЬ 4</div>
           <div className="text-[10px] text-gray-400 mt-2 uppercase font-black">ШТАТНЫЙ РЕЖИМ</div>
         </div>
 
@@ -260,7 +260,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
             {isNewsLoading ? (
                <div className="p-12 flex justify-center"><RefreshCw className="animate-spin text-gray-600" /></div>
             ) : news.length > 0 ? news.map(item => (
-              <div key={item.id} className={`p-4 hover:bg-white/5 transition-colors border-l-2 relative group ${item.priority === 'CRITICAL' ? 'border-red-600 bg-red-950/5' : 'border-transparent'}`}>
+              <div key={item.id} className={`p-4 hover:bg-white/5 transition-colors border-l-2 relative group ${item.priority === 'КРИТИЧЕСКИЙ' ? 'border-red-600 bg-red-950/5' : 'border-transparent'}`}>
                 {isAdminService && (
                    <button 
                     onClick={() => handleDeleteNews(item.id)}
@@ -270,7 +270,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                    </button>
                 )}
                 <div className="flex justify-between items-start mb-1">
-                   <span className={`text-[8px] font-black px-1 ${item.priority === 'CRITICAL' ? 'bg-red-600 text-white' : 'text-scp-terminal'}`}>
+                   <span className={`text-[8px] font-black px-1 ${item.priority === 'КРИТИЧЕСКИЙ' ? 'bg-red-600 text-white' : 'text-scp-terminal'}`}>
                      {item.priority}
                    </span>
                    <span className="text-[8px] text-gray-600 italic">
@@ -322,7 +322,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                 )}
                 <div className="flex justify-between items-start mb-2 pr-8">
                   <div className="flex items-center gap-3">
-                    <span className={`px-2 py-0.5 border text-[9px] font-black ${task.priority === 'CRITICAL' ? 'text-red-500 border-red-500' : 'text-gray-500 border-gray-500'}`}>
+                    <span className={`px-2 py-0.5 border text-[9px] font-black ${task.priority === 'КРИТИЧЕСКИЙ' ? 'text-red-500 border-red-500' : 'text-gray-500 border-gray-500'}`}>
                       {task.priority}
                     </span>
                     <h4 className="font-bold text-xs text-white uppercase">{task.title}</h4>
@@ -331,8 +331,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                 </div>
                 <p className="text-[10px] text-gray-500 leading-normal mb-2">{task.description}</p>
                 <div className="flex items-center gap-2">
-                   <div className={`text-[8px] font-black px-1 ${task.status === 'COMPLETED' ? 'text-green-500 border border-green-500' : 'text-yellow-600 border border-yellow-600'}`}>
-                     STATUS: {task.status}
+                   <div className={`text-[8px] font-black px-1 ${task.status === 'ЗАВЕРШЕНО' ? 'text-green-500 border border-green-500' : 'text-yellow-600 border border-yellow-600'}`}>
+                     СТАТУС: {task.status}
                    </div>
                 </div>
               </div>
@@ -417,7 +417,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
               <div className="space-y-1">
                 <label className="text-[9px] text-gray-500 uppercase tracking-widest">Приоритет уведомления</label>
                 <div className="flex gap-2">
-                  {['NORMAL', 'URGENT', 'CRITICAL'].map(p => (
+                  {['ОБЫЧНЫЙ', 'СРОЧНО', 'КРИТИЧЕСКИЙ'].map(p => (
                     <button
                       key={p}
                       type="button"
@@ -507,10 +507,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                       value={newTask.priority}
                       onChange={e => setNewTask({...newTask, priority: e.target.value as any})}
                     >
-                      <option value="LOW">Низкий</option>
-                      <option value="MEDIUM">Средний</option>
-                      <option value="HIGH">Высокий</option>
-                      <option value="CRITICAL">Критический</option>
+                      <option value="НИЗКИЙ">Низкий</option>
+                      <option value="СРЕДНИЙ">Средний</option>
+                      <option value="ВЫСОКИЙ">Высокий</option>
+                      <option value="КРИТИЧЕСКИЙ">Критический</option>
                     </select>
                  </div>
               </div>
