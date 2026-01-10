@@ -69,7 +69,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       } else {
         setDbStatus('ONLINE');
         setDbStatusColor('green');
-        if (count !== null) setPersonnelCount(count > 0 ? count : 4);
+        if (count !== null) setPersonnelCount(count > 0 ? count : 4102);
       }
     } catch (e) {
       setDbStatus('АВТОНОМНО');
@@ -78,28 +78,34 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
   };
 
   const fetchTasks = async () => {
+    if (!isSupabaseConfigured()) return;
     setIsTasksLoading(true);
     try {
-      // Фильтрация: задания видны только тем, кто их выдал, и тем отделам, кому выдано.
-      // Примечание: O5/Админы (уровень 5+) по лору видят всё, но мы строго следуем запросу.
-      // Если нужно, чтобы O5 видели всё, можно добавить условие.
-      
       let query = supabase!.from('tasks').select('*');
       
-      // Если это не супер-админ в режиме OMNI, применяем фильтрацию видимости
-      if (!currentUser.isSuperAdmin || currentClearance < 6) {
+      const isSuperAdmin = currentUser.isSuperAdmin || currentClearance >= 6;
+      const isAdminService = currentUser.department === 'Административная служба';
+
+      // Фильтрация видимости
+      if (isSuperAdmin) {
+          // OMNI/SuperAdmin видит всё
+      } else if (isAdminService) {
+          // Административная служба видит все задания, кроме ОВБ
+          query = query.neq('assigned_department', 'ОВБ');
+      } else {
+          // Остальные: только свои или задания своего отдела
           query = query.or(`created_by.eq.${currentUser.id},assigned_department.eq."${currentUser.department}"`);
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
-        console.error("Supabase error fetching tasks:", error);
+        console.error("Ошибка загрузки задач:", error.message || error);
       } else if (data) {
         setTasks(data);
       }
-    } catch (e) {
-      console.error("Fatal error fetching tasks:", e);
+    } catch (e: any) {
+      console.error("Критическая ошибка fetchTasks:", e.message || e);
     } finally {
       setIsTasksLoading(false);
     }
@@ -112,7 +118,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
     setIsSubmittingTask(true);
     try {
       const { error } = await supabase!.from('tasks').insert([{
-        title: newTask.title,
+        title: newTask.title.toUpperCase(),
         description: newTask.description,
         assigned_department: newTask.assigned_department,
         priority: newTask.priority,
@@ -120,27 +126,30 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
         status: 'PENDING'
       }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase insert error:", error);
+        throw new Error(error.message || "Ошибка вставки данных");
+      }
 
       setIsTaskModalOpen(false);
       setNewTask({ title: '', description: '', assigned_department: '', priority: 'MEDIUM' });
       fetchTasks();
-    } catch (e) {
-      console.error("Create task error:", e);
-      alert("ОШИБКА ПРИ СОЗДАНИИ ЗАДАНИЯ");
+    } catch (e: any) {
+      console.error("Full Create task error:", e);
+      alert(`ОШИБКА ДИРЕКТИВЫ: ${e.message || "СБОЙ БАЗЫ ДАННЫХ"}`);
     } finally {
       setIsSubmittingTask(false);
     }
   };
 
   const handleDeleteTask = async (id: string) => {
-    if (!confirm('ПОДТВЕРДИТЬ УДАЛЕНИЕ?')) return;
+    if (!confirm('ПОДТВЕРДИТЬ УДАЛЕНИЕ ДИРЕКТИВЫ?')) return;
     try {
       const { error } = await supabase!.from('tasks').delete().eq('id', id);
       if (error) throw error;
       fetchTasks();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error("Delete task error:", e.message || e);
     }
   };
 
@@ -157,7 +166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
     switch (s) {
       case 'COMPLETED': return <CheckCircle size={14} className="text-green-500" />;
       case 'FAILED': return <Skull size={14} className="text-red-600" />;
-      case 'IN_PROGRESS': return <Activity size={14} className="text-blue-400 animate-spin-slow" />;
+      case 'IN_PROGRESS': return <Activity size={14} className="text-blue-400 animate-spin" />;
       default: return <Clock size={14} className="text-gray-500" />;
     }
   };
@@ -205,11 +214,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
         </div>
       </div>
 
-      {/* JOURNAL OF TASKS */}
       <div className="bg-scp-panel border border-gray-800 flex flex-col overflow-hidden shadow-lg">
         <div className="p-4 border-b border-gray-800 bg-gray-900/50 flex justify-between items-center">
           <h3 className="text-sm font-bold tracking-widest text-gray-300 flex items-center gap-2 uppercase">
-            <ClipboardList className="text-scp-terminal" size={18} /> ЖУРНАЛ ЗАДАНИЙ
+            <ClipboardList className="text-scp-terminal" size={18} /> ЖУРНАЛ ЗАДАНИЙ И ДИРЕКТИВ
           </h3>
           <div className="flex gap-2">
             <button 
@@ -247,7 +255,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                     </div>
                     <h4 className="font-bold text-sm text-white uppercase tracking-tight">
                         {task.title}
-                        {isMine && <span className="ml-2 text-[8px] text-scp-terminal border border-scp-terminal px-1">ВАШ ЗАКАЗ</span>}
+                        {isMine && <span className="ml-2 text-[8px] text-scp-terminal border border-scp-terminal px-1">ВАШ ПРИКАЗ</span>}
                     </h4>
                   </div>
                   <div className="flex items-center gap-3">
@@ -255,7 +263,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                       {getStatusIcon(task.status)}
                       <span className="uppercase">{task.status}</span>
                     </div>
-                    {canAssignTasks && (task.created_by === currentUser.id || isHighLevelView) && (
+                    {(task.created_by === currentUser.id || isHighLevelView) && (
                       <button 
                         onClick={() => handleDeleteTask(task.id)}
                         className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 transition-all p-1"
@@ -273,13 +281,13 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                     <Briefcase size={10} />
                     <span>Целевой отдел: <span className="text-scp-terminal font-bold">{task.assigned_department}</span></span>
                   </div>
-                  <div>Зарегистрировано: {new Date(task.created_at).toLocaleString()}</div>
+                  <div>Регистрация: {new Date(task.created_at).toLocaleString()}</div>
                 </div>
               </div>
             );
           }) : (
             <div className="p-12 text-center text-gray-600 italic text-xs uppercase tracking-[0.3em]">
-              Задания отсутствуют или у вас недостаточно прав для их просмотра.
+              Директивы отсутствуют или у вас недостаточно прав для их просмотра.
             </div>
           )}
         </div>
@@ -304,7 +312,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
 
         <div className="bg-scp-panel border border-gray-800 p-6">
            <h3 className="text-sm font-bold tracking-widest text-gray-400 mb-6 flex items-center uppercase">
-             <Radio className="mr-2 w-4 h-4" /> {isHighLevelView ? 'ГЛОБАЛЬНЫЙ ФОН ЮМА' : 'СТАБИЛЬНОСТЬ ЯКОРЕЙ РЕАЛЬНОСТИ'}
+             <Radio className="mr-2 w-4 h-4" /> {isHighLevelView ? 'ГЛОБАЛЬНЫЙ ФОН ЮМА' : 'СТАБИЛЬНОСТЬ ЯКОРЕЙ РЕАЛЬНОСТЬ'}
            </h3>
            <div className="h-64 w-full">
              <ResponsiveContainer width="100%" height="100%">
@@ -343,7 +351,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
               </div>
 
               <div className="space-y-1">
-                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Описание задания</label>
+                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Описание директивы</label>
                 <textarea 
                   required
                   rows={4}
