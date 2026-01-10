@@ -17,7 +17,8 @@ export const DEPARTMENTS = [
   'Обслуживающий Персонал',
   'Мед Служба',
   'МОГ',
-  'ОВБ'
+  'ОВБ',
+  'Административная служба'
 ] as const;
 
 export type Department = typeof DEPARTMENTS[number];
