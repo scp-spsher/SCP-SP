@@ -4,10 +4,10 @@ import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { 
   ShieldAlert, Check, X, RefreshCw, UserCheck, 
   AlertOctagon, FileText, Save, ArrowLeft, 
-  Trash2, Database, User, Shield
+  Trash2, Database, User, Shield, EyeOff
 } from 'lucide-react';
 import { StoredUser, SESSION_KEY } from '../services/authService';
-import { SecurityClearance } from '../types';
+import { SecurityClearance, DEPARTMENTS } from '../types';
 import { SCPLogo } from './SCPLogo';
 
 const STORAGE_KEY = 'scp_net_users';
@@ -21,6 +21,7 @@ interface AdminUser {
   registered_at: string;
   title?: string;
   department?: string;
+  cover_department?: string;
   site?: string;
   avatar_url?: string;
 }
@@ -66,16 +67,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
         setStatusMsg('МЕЙНФРЕЙМ: ONLINE');
         
         const mappedForLocal = fetchedUsers.map(u => ({
-          id: u.id,
-          email: u.id,
-          name: u.name,
-          clearance: u.clearance,
-          registeredAt: u.registered_at,
-          is_approved: u.is_approved,
-          title: u.title,
-          department: u.department,
-          site: u.site,
-          avatar_url: u.avatar_url
+          ...u,
+          registeredAt: u.registered_at
         }));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedForLocal));
       } catch (e) {
@@ -184,10 +177,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
     setIsSaving(true);
     setStatusMsg('СОХРАНЕНИЕ...');
     
-    // Ensure numeric clearance
     const sanitizedForm = {
       ...editForm,
-      clearance: Number(editForm.clearance) as SecurityClearance
+      clearance: Number(editForm.clearance) as SecurityClearance,
+      // Если не ОВБ, очищаем отдел прикрытия
+      cover_department: editForm.department === 'ОВБ' ? editForm.cover_department : editForm.department
     };
 
     try {
@@ -208,7 +202,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
       setStatusMsg('ОБНОВЛЕНО');
       setSelectedUser(sanitizedForm);
 
-      // If editing self, update app-wide context
       if (sanitizedForm.id === currentUser.id) {
         const updatedSelf: StoredUser = {
           ...currentUser,
@@ -216,6 +209,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
           clearance: sanitizedForm.clearance,
           title: sanitizedForm.title,
           department: sanitizedForm.department,
+          cover_department: sanitizedForm.cover_department,
           site: sanitizedForm.site,
           is_approved: sanitizedForm.is_approved,
           avatar_url: sanitizedForm.avatar_url || currentUser.avatar_url
@@ -240,6 +234,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
 
   if (selectedUser && editForm) {
     const isSecretAdmin = editForm.id === SECRET_ADMIN_ID;
+    const showCoverDept = editForm.department === 'ОВБ';
 
     return (
       <div className="flex flex-col h-full gap-6 animate-in slide-in-from-right-4 duration-300 font-mono text-scp-text">
@@ -302,9 +297,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                  <input placeholder="НЕ УКАЗАНО" className="w-full bg-black border border-gray-800 p-3 text-sm focus:border-scp-terminal outline-none" value={editForm.title || ''} onChange={e => setEditForm({...editForm, title: e.target.value})} />
               </div>
               <div className="space-y-1">
-                 <label className="text-[9px] text-gray-500 uppercase tracking-widest">Отдел / Сектор</label>
-                 <input placeholder="НЕ УКАЗАНО" className="w-full bg-black border border-gray-800 p-3 text-sm focus:border-scp-terminal outline-none" value={editForm.department || ''} onChange={e => setEditForm({...editForm, department: e.target.value})} />
+                 <label className="text-[9px] text-gray-500 uppercase tracking-widest">Отдел (РЕАЛЬНЫЙ)</label>
+                 <select 
+                  className="w-full bg-black border border-gray-800 p-3 text-sm text-white focus:border-scp-terminal outline-none"
+                  value={editForm.department || ''}
+                  onChange={e => setEditForm({...editForm, department: e.target.value})}
+                 >
+                   <option value="">НЕ УКАЗАНО</option>
+                   {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                 </select>
               </div>
+
+              {showCoverDept && (
+                <div className="space-y-1 md:col-span-2 animate-in fade-in slide-in-from-top-2">
+                   <label className="text-[9px] text-yellow-500 uppercase tracking-widest flex items-center gap-2">
+                     <EyeOff size={10} /> Отдел прикрытия (Легенда)
+                   </label>
+                   <select 
+                    className="w-full bg-black border border-yellow-900/50 p-3 text-sm text-yellow-500/80 focus:border-yellow-500 outline-none"
+                    value={editForm.cover_department || ''}
+                    onChange={e => setEditForm({...editForm, cover_department: e.target.value})}
+                   >
+                     <option value="">ВЫБЕРИТЕ ЛЕГЕНДУ</option>
+                     {DEPARTMENTS.filter(d => d !== 'ОВБ').map(d => <option key={d} value={d}>{d}</option>)}
+                   </select>
+                   <p className="text-[8px] text-gray-600 mt-1 uppercase">Данный отдел будет отображаться персоналу с уровнем допуска ниже 5.</p>
+                </div>
+              )}
+
               <div className="space-y-1 md:col-span-2">
                  <label className="text-[9px] text-gray-500 uppercase tracking-widest">Местоположение (Зона/Сайт)</label>
                  <input placeholder="НЕ УКАЗАНО" className="w-full bg-black border border-gray-800 p-3 text-sm focus:border-scp-terminal outline-none" value={editForm.site || ''} onChange={e => setEditForm({...editForm, site: e.target.value})} />
@@ -394,6 +414,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                     {users.map((user) => {
                         const isSecretAdmin = user.id === SECRET_ADMIN_ID;
                         const isCurrentTerminating = terminatingId === user.id;
+                        const isISD = user.department === 'ОВБ';
 
                         return (
                         <tr 
@@ -403,15 +424,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser, onUserUpdate, onVi
                             <td className="p-5 pl-8">
                                 <button 
                                     onClick={() => onViewProfile && onViewProfile(user.id)}
-                                    className="font-bold text-white hover:text-scp-terminal transition-colors text-left block uppercase tracking-tight"
+                                    className="font-bold text-white hover:text-scp-terminal transition-colors text-left block uppercase tracking-tight flex items-center gap-2"
                                 >
                                     {String(user.name)}
+                                    {/* Fix: Removed invalid 'title' prop from Shield icon */}
+                                    {isISD && <Shield size={10} className="text-red-500" />}
                                 </button>
                                 <div className="text-[9px] text-gray-600 font-mono mt-1 opacity-60 tracking-tighter">{String(user.id)}</div>
                             </td>
                             <td className="p-5 hidden md:table-cell cursor-pointer" onClick={() => handleOpenDossier(user)}>
                                 <div className="text-xs text-gray-400 font-bold uppercase tracking-wide">{String(user.title || 'ВНЕ ШТАТА')}</div>
-                                <div className="text-[9px] text-gray-600 uppercase mt-1 tracking-widest">{String(user.site || 'Z-19')} // {String(user.department || 'GEN')}</div>
+                                <div className="text-[9px] text-gray-600 uppercase mt-1 tracking-widest">
+                                  {isISD ? <span className="text-red-900 font-black">ОВБ</span> : String(user.department || 'GEN')} // {String(user.site || 'Z-19')}
+                                </div>
                             </td>
                             <td className="p-5 text-center cursor-pointer" onClick={() => handleOpenDossier(user)}>
                                 <span className={`inline-block px-3 py-1 border-2 text-[10px] font-black tracking-widest ${Number(user.clearance) >= 5 ? 'border-yellow-600 text-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.2)]' : 'border-gray-800 text-gray-500'}`}>
