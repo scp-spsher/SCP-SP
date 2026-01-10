@@ -41,16 +41,18 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
   const [isNewsLoading, setIsNewsLoading] = useState(false);
   const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
   const [isPublishingNews, setIsPublishingNews] = useState(false);
-  const [newNews, setNewNews] = useState({ title: '', content: '', priority: 'ОБЫЧНЫЙ' as any });
+  // Fix: Use correct priority key from types.ts
+  const [newNews, setNewNews] = useState({ title: '', content: '', priority: 'NORMAL' as 'NORMAL' | 'URGENT' | 'CRITICAL' });
 
   // Tasks Create State
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  // Fix: Use correct TaskPriority from types.ts
   const [newTask, setNewTask] = useState({ 
     title: '', 
     description: '', 
     assigned_department: DEPARTMENTS[0], 
-    priority: 'СРЕДНИЙ' as TaskPriority 
+    priority: 'MEDIUM' as TaskPriority 
   });
 
   const isHighLevelView = currentClearance >= 5;
@@ -147,7 +149,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
         description: newTask.description,
         assigned_department: newTask.assigned_department,
         priority: newTask.priority,
-        status: 'ОЖИДАЕТ',
+        // Fix: Use correct TaskStatus from types.ts
+        status: 'PENDING',
         created_by: currentUser.id
       };
 
@@ -157,7 +160,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       }
 
       setIsTaskModalOpen(false);
-      setNewTask({ title: '', description: '', assigned_department: DEPARTMENTS[0], priority: 'СРЕДНИЙ' });
+      // Fix: Reset with correct priority key
+      setNewTask({ title: '', description: '', assigned_department: DEPARTMENTS[0], priority: 'MEDIUM' });
       fetchTasks();
     } catch (e) {
       alert("ОШИБКА СОЗДАНИЯ ЗАДАНИЯ");
@@ -186,7 +190,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       }
 
       setIsNewsModalOpen(false);
-      setNewNews({ title: '', content: '', priority: 'ОБЫЧНЫЙ' });
+      // Fix: Reset with correct priority key
+      setNewNews({ title: '', content: '', priority: 'NORMAL' });
       fetchNews();
     } catch (e: any) {
       alert("ОШИБКА ПУБЛИКАЦИИ: ПРОВЕРЬТЕ НАЛИЧИЕ ТАБЛИЦЫ 'news'");
@@ -260,7 +265,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
             {isNewsLoading ? (
                <div className="p-12 flex justify-center"><RefreshCw className="animate-spin text-gray-600" /></div>
             ) : news.length > 0 ? news.map(item => (
-              <div key={item.id} className={`p-4 hover:bg-white/5 transition-colors border-l-2 relative group ${item.priority === 'КРИТИЧЕСКИЙ' ? 'border-red-600 bg-red-950/5' : 'border-transparent'}`}>
+              // Fix: Comparison with correct news priority keys
+              <div key={item.id} className={`p-4 hover:bg-white/5 transition-colors border-l-2 relative group ${item.priority === 'CRITICAL' ? 'border-red-600 bg-red-950/5' : 'border-transparent'}`}>
                 {isAdminService && (
                    <button 
                     onClick={() => handleDeleteNews(item.id)}
@@ -270,8 +276,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                    </button>
                 )}
                 <div className="flex justify-between items-start mb-1">
-                   <span className={`text-[8px] font-black px-1 ${item.priority === 'КРИТИЧЕСКИЙ' ? 'bg-red-600 text-white' : 'text-scp-terminal'}`}>
-                     {item.priority}
+                   {/* Fix: Display mapping for news priority */}
+                   <span className={`text-[8px] font-black px-1 ${item.priority === 'CRITICAL' ? 'bg-red-600 text-white' : 'text-scp-terminal'}`}>
+                     {item.priority === 'CRITICAL' ? 'КРИТИЧЕСКИЙ' : item.priority === 'URGENT' ? 'СРОЧНО' : 'ОБЫЧНЫЙ'}
                    </span>
                    <span className="text-[8px] text-gray-600 italic">
                      {new Date(item.created_at).toLocaleDateString()}
@@ -322,8 +329,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                 )}
                 <div className="flex justify-between items-start mb-2 pr-8">
                   <div className="flex items-center gap-3">
-                    <span className={`px-2 py-0.5 border text-[9px] font-black ${task.priority === 'КРИТИЧЕСКИЙ' ? 'text-red-500 border-red-500' : 'text-gray-500 border-gray-500'}`}>
-                      {task.priority}
+                    {/* Fix: Comparison with correct task priority keys */}
+                    <span className={`px-2 py-0.5 border text-[9px] font-black ${task.priority === 'CRITICAL' ? 'text-red-500 border-red-500' : 'text-gray-500 border-gray-500'}`}>
+                      {task.priority === 'CRITICAL' ? 'КРИТИЧЕСКИЙ' : task.priority === 'HIGH' ? 'ВЫСОКИЙ' : task.priority === 'MEDIUM' ? 'СРЕДНИЙ' : 'НИЗКИЙ'}
                     </span>
                     <h4 className="font-bold text-xs text-white uppercase">{task.title}</h4>
                   </div>
@@ -331,8 +339,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                 </div>
                 <p className="text-[10px] text-gray-500 leading-normal mb-2">{task.description}</p>
                 <div className="flex items-center gap-2">
-                   <div className={`text-[8px] font-black px-1 ${task.status === 'ЗАВЕРШЕНО' ? 'text-green-500 border border-green-500' : 'text-yellow-600 border border-yellow-600'}`}>
-                     СТАТУС: {task.status}
+                   {/* Fix: Status display mapping and comparison */}
+                   <div className={`text-[8px] font-black px-1 ${task.status === 'COMPLETED' ? 'text-green-500 border border-green-500' : 'text-yellow-600 border border-yellow-600'}`}>
+                     СТАТУС: {task.status === 'COMPLETED' ? 'ЗАВЕРШЕНО' : task.status === 'PENDING' ? 'ОЖИДАЕТ' : task.status === 'IN_PROGRESS' ? 'В ПРОЦЕССЕ' : 'ОШИБКА'}
                    </div>
                 </div>
               </div>
@@ -417,14 +426,15 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
               <div className="space-y-1">
                 <label className="text-[9px] text-gray-500 uppercase tracking-widest">Приоритет уведомления</label>
                 <div className="flex gap-2">
-                  {['ОБЫЧНЫЙ', 'СРОЧНО', 'КРИТИЧЕСКИЙ'].map(p => (
+                  {/* Fix: Map news priority correctly with UI labels */}
+                  {['NORMAL', 'URGENT', 'CRITICAL'].map(p => (
                     <button
                       key={p}
                       type="button"
-                      onClick={() => setNewNews({...newNews, priority: p})}
+                      onClick={() => setNewNews({...newNews, priority: p as any})}
                       className={`flex-1 py-2 text-[10px] font-black border transition-all ${newNews.priority === p ? 'bg-scp-terminal text-black border-scp-terminal' : 'bg-transparent text-gray-600 border-gray-800 hover:border-gray-600'}`}
                     >
-                      {p}
+                      {p === 'NORMAL' ? 'ОБЫЧНЫЙ' : p === 'URGENT' ? 'СРОЧНО' : 'КРИТИЧЕСКИЙ'}
                     </button>
                   ))}
                 </div>
@@ -502,15 +512,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                  </div>
                  <div className="space-y-1">
                     <label className="text-[9px] text-gray-500 uppercase tracking-widest">Приоритет</label>
+                    {/* Fix: Map task priority correctly with correct value keys */}
                     <select 
                       className="w-full bg-black border border-gray-800 p-3 text-[10px] text-white outline-none focus:border-scp-terminal"
                       value={newTask.priority}
                       onChange={e => setNewTask({...newTask, priority: e.target.value as any})}
                     >
-                      <option value="НИЗКИЙ">Низкий</option>
-                      <option value="СРЕДНИЙ">Средний</option>
-                      <option value="ВЫСОКИЙ">Высокий</option>
-                      <option value="КРИТИЧЕСКИЙ">Критический</option>
+                      <option value="LOW">Низкий</option>
+                      <option value="MEDIUM">Средний</option>
+                      <option value="HIGH">Высокий</option>
+                      <option value="CRITICAL">Критический</option>
                     </select>
                  </div>
               </div>
