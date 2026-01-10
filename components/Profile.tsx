@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { StoredUser, authService } from '../services/authService';
-import { User, Shield, MapPin, Briefcase, Crown, Upload, Camera, ArrowLeft, Edit3, Check, X, RefreshCw, EyeOff } from 'lucide-react';
+import { User, Shield, MapPin, Briefcase, Crown, Upload, Camera, ArrowLeft, Edit3, Check, X, RefreshCw, EyeOff, ShieldCheck } from 'lucide-react';
 import { SCPLogo } from './SCPLogo';
 
 const SECRET_ADMIN_ID = '36046d5d-dde4-4cf6-a2de-794334b7af5c';
@@ -31,23 +31,25 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
   const isSimulatedO5 = currentClearance >= 5;
   const isDisplayingAdmin = displayClearance === 6;
 
-  // Логика отображения отдела
+  // Логика маскировки отдела ОВБ
   const departmentInfo = useMemo(() => {
     const isOVB = user.department === 'ОВБ';
     
-    // Если смотрит O5/Админ или сам сотрудник — видит правду
+    // Если смотрит O5, администратор или сам сотрудник — видят правду
     if (isSimulatedO5 || isViewingSelf) {
       return {
-        label: user.department || 'НЕ УКАЗАНО',
+        label: user.department || 'ОБЩИЙ РЕЕСТР',
         isMasked: isOVB,
-        real: isOVB ? `ОВБ [ПОД ПРИКРЫТИЕМ: ${user.cover_department || 'НЕТ'}]` : user.department
+        real: isOVB ? `ОВБ [ЛЕГЕНДА: ${user.cover_department || 'НЕ УКАЗАНО'}]` : user.department,
+        status: isOVB ? 'VERIFIED ISD' : 'FOUNDATION PERSONNEL'
       };
     }
 
-    // Ообычный персонал видит только прикрытие, если это ОВБ
+    // Рядовой персонал видит только отдел прикрытия (легенду), если это ОВБ
     return {
-      label: (isOVB ? user.cover_department : user.department) || 'НЕ УКАЗАНО',
-      isMasked: false
+      label: (isOVB ? (user.cover_department || 'Служба Безопасности') : user.department) || 'ОБЩИЙ РЕЕСТР',
+      isMasked: false,
+      status: 'VERIFIED PERSONNEL'
     };
   }, [user, isSimulatedO5, isViewingSelf]);
 
@@ -135,7 +137,7 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
                 {isDisplayingAdmin ? <Crown size={24} className="text-yellow-500" /> : <SCPLogo className={textColor} />}
              </div>
              <div>
-               <h3 className="font-bold text-lg tracking-widest text-white uppercase">ФОНД SCP</h3>
+               <h3 className="font-bold text-lg tracking-widest text-white uppercase font-mono">ФОНД SCP</h3>
                <p className="text-[10px] text-gray-400 uppercase tracking-widest leading-none">Обезопасить. Удержать. Сохранить.</p>
              </div>
           </div>
@@ -165,11 +167,11 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
               </div>
               <div className="w-32 text-center">
                 <div className="text-[8px] text-gray-500 uppercase tracking-widest">Код верификации</div>
-                <div className="text-[10px] font-mono break-all leading-tight text-gray-600">{safeHash}</div>
+                <div className="text-[10px] font-mono break-all leading-tight text-gray-600 tracking-tighter">{safeHash}</div>
               </div>
            </div>
 
-           <div className="flex-1 space-y-4">
+           <div className="flex-1 space-y-4 font-mono">
               <div>
                 <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center justify-between">
                   <span className="flex items-center gap-1"><User size={10} /> Имя сотрудника</span>
@@ -188,7 +190,7 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
                   <div className="mt-1 flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                     <input 
                       autoFocus
-                      className="flex-1 bg-black border border-scp-terminal/50 p-2 text-sm text-scp-terminal font-mono outline-none focus:border-scp-terminal uppercase"
+                      className="flex-1 bg-black border border-scp-terminal/50 p-2 text-sm text-scp-terminal outline-none focus:border-scp-terminal uppercase"
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       onKeyDown={(e) => {
@@ -214,38 +216,37 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
                   </div>
                 ) : (
                   <>
-                    <div className="text-xl font-bold text-white font-mono uppercase tracking-wide flex items-center gap-2">
+                    <div className="text-xl font-bold text-white uppercase tracking-wide flex items-center gap-2">
                       {user.name}
                     </div>
-                    <div className="text-[9px] text-gray-600 font-mono mt-0.5">{user.id}</div>
+                    <div className="text-[9px] text-gray-600 mt-0.5">{user.id}</div>
                   </>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><Briefcase size={10} /> Назначение</label>
-                  <div className="text-sm text-gray-300 font-mono">
-                    {user.title || (isDisplayingAdmin ? 'Администратор' : (isSimulatedO5 ? 'Смотритель' : 'Полевой Агент'))}
+                  <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><Briefcase size={10} /> Должность</label>
+                  <div className="text-sm text-gray-300">
+                    {user.title || (isDisplayingAdmin ? 'Администратор' : (isSimulatedO5 ? 'Смотритель O5' : 'Сотрудник Фонда'))}
                   </div>
                 </div>
                 <div>
                   <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><Shield size={10} /> Отдел</label>
-                  <div className={`text-sm font-mono flex items-center gap-1 ${departmentInfo.isMasked ? 'text-red-500' : 'text-gray-300'}`}>
+                  <div className={`text-sm flex items-center gap-1 ${departmentInfo.isMasked ? 'text-yellow-500' : 'text-gray-300'}`}>
                      {departmentInfo.label}
-                     {/* Fix: Removed invalid 'title' prop from EyeOff icon */}
-                     {departmentInfo.isMasked && <EyeOff size={10} />}
+                     {departmentInfo.isMasked && (isSimulatedO5 || isViewingSelf) && <EyeOff size={10} />}
                   </div>
-                  {departmentInfo.real && isSimulatedO5 && (
-                    <div className="text-[8px] text-gray-600 uppercase mt-0.5 font-mono">
-                      [Verified: {user.department}]
+                  {departmentInfo.real && (isSimulatedO5 || isViewingSelf) && (
+                    <div className="text-[8px] text-gray-600 uppercase mt-0.5 border-t border-gray-800 pt-1 flex items-center gap-1">
+                      <ShieldCheck size={8} /> {departmentInfo.real}
                     </div>
                   )}
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><MapPin size={10} /> Текущая локация</label>
-                <div className="text-sm text-gray-300 font-mono">
-                  {user.site || (isSimulatedO5 ? '[УДАЛЕНО]' : 'Зона-19')}
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><MapPin size={10} /> Место дислокации</label>
+                <div className="text-sm text-gray-300">
+                  {user.site || (isSimulatedO5 ? '[ЗАСЕКРЕЧЕНО]' : 'Зона-19')}
                 </div>
               </div>
            </div>
@@ -262,7 +263,7 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
       {isSimulatedO5 && (
         <div className="mt-8 p-4 border border-yellow-900/50 bg-yellow-900/10 w-full text-center">
            <p className="text-yellow-600 text-xs font-bold tracking-[0.2em] uppercase">
-             {displayClearance === 6 ? '⚠ ПРЕДОСТАВЛЕН ROOT-ДОСТУП' : '⚠ ОБНАРУЖЕНА АВТОРИЗАЦИЯ КОМАНДОВАНИЯ'}
+             {displayClearance === 6 ? '⚠ ROOT-ДОСТУП АКТИВИРОВАН' : '⚠ АВТОРИЗАЦИЯ СМОТРИТЕЛЯ ПОДТВЕРЖДЕНА'}
            </p>
         </div>
       )}
