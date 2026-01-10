@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Lock, Radio, Activity, Users, Skull, ClipboardList, Plus, Trash2, RefreshCw, Biohazard, Megaphone, Newspaper, Send, X, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Lock, Radio, Activity, Users, Skull, ClipboardList, Plus, Trash2, RefreshCw, Megaphone, Newspaper, Send, X, ShieldAlert } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { SCPTask, TaskPriority, TaskStatus, DEPARTMENTS, SCPNews } from '../types';
@@ -11,13 +11,23 @@ interface DashboardProps {
   currentUser: StoredUser;
 }
 
-const infectionData = [
-  { time: '00:00', level: 0.01 },
-  { time: '04:00', level: 0.02 },
-  { time: '08:00', level: 0.05 },
-  { time: '12:00', level: 0.12 },
-  { time: '16:00', level: 0.08 },
-  { time: '20:00', level: 0.03 },
+const statusData = [
+  { time: '00:00', level: 98.4 },
+  { time: '04:00', level: 98.2 },
+  { time: '08:00', level: 98.5 },
+  { time: '12:00', level: 99.1 },
+  { time: '16:00', level: 98.8 },
+  { time: '20:00', level: 98.3 },
+];
+
+const incidentData = [
+  { time: 'Пн', value: 2 },
+  { time: 'Вт', value: 5 },
+  { time: 'Ср', value: 1 },
+  { time: 'Чт', value: 0 },
+  { time: 'Пт', value: 8 },
+  { time: 'Сб', value: 3 },
+  { time: 'Вс', value: 1 },
 ];
 
 const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) => {
@@ -25,7 +35,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
   const [dbStatus, setDbStatus] = useState<string>('OFFLINE');
   const [tasks, setTasks] = useState<SCPTask[]>([]);
   const [isTasksLoading, setIsTasksLoading] = useState(false);
-  const [infectionLevel, setInfectionLevel] = useState(0.04);
   
   // News State
   const [news, setNews] = useState<SCPNews[]>([]);
@@ -43,11 +52,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       fetchTasks();
       fetchNews();
     }
-    
-    const interval = setInterval(() => {
-      setInfectionLevel(prev => Math.max(0.01, prev + (Math.random() - 0.5) * 0.02));
-    }, 5000);
-    return () => clearInterval(interval);
   }, [currentClearance, currentUser.id]);
 
   const fetchDashboardData = async () => {
@@ -131,7 +135,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       fetchNews();
     } catch (e: any) {
       alert("ОШИБКА ПУБЛИКАЦИИ: " + (e.message || "СБОЙ БАЗЫ ДАННЫХ"));
-      // Фоллбэк: добавить локально если таблицы нет
       const mockNews: SCPNews = {
           id: Date.now().toString(),
           title: newNews.title.toUpperCase(),
@@ -155,28 +158,28 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
           {isHighLevelView ? 'ГЛАЗ БОГА :: SCPNET DASHBOARD' : 'СТАТУС ЗОНЫ-19'}
         </h2>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1 border border-green-900 bg-green-950/20 text-green-500 rounded">
-            <Biohazard size={16} className="animate-pulse" />
-            <span className="text-[10px] font-black uppercase font-mono">BIO-LEVEL: SAFE</span>
+          <div className="flex items-center gap-2 px-3 py-1 border border-scp-accent/30 bg-scp-accent/5 text-scp-accent rounded">
+            <ShieldAlert size={16} className="animate-pulse" />
+            <span className="text-[10px] font-black uppercase font-mono">STATUS: SECURE</span>
           </div>
           <div className="text-xs font-bold text-scp-terminal border border-gray-800 px-3 py-1">КАНАЛ: {dbStatus}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-scp-panel border border-gray-800 p-4 relative group hover:border-green-900 transition-colors">
+        <div className="bg-scp-panel border border-gray-800 p-4 relative group hover:border-scp-accent transition-colors">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30">
-            <Biohazard size={48} className="text-green-500" />
+            <AlertTriangle size={48} className="text-scp-accent" />
           </div>
-          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">ИНФЕКЦИОННЫЙ ФОН</h3>
-          <div className="text-3xl font-bold text-green-500">{infectionLevel.toFixed(3)}%</div>
-          <div className="text-[10px] text-green-800 mt-2 uppercase font-black">SCP-008: СТАБИЛЬНО</div>
+          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">УРОВЕНЬ DEFCON</h3>
+          <div className="text-3xl font-bold text-scp-accent">LEVEL 4</div>
+          <div className="text-[10px] text-gray-400 mt-2 uppercase font-black">ШТАТНЫЙ РЕЖИМ</div>
         </div>
 
         <div className="bg-scp-panel border border-gray-800 p-4 relative group">
-          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">ДЕФКОН</h3>
-          <div className="text-3xl font-bold text-red-500">УРОВЕНЬ 4</div>
-          <div className="text-[10px] text-gray-400 mt-2 uppercase">Штатный режим</div>
+          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">ЦЕЛОСТНОСТЬ ЗОНЫ</h3>
+          <div className="text-3xl font-bold text-blue-400">98.4%</div>
+          <div className="text-[10px] text-gray-400 mt-2 uppercase">Герметизация в норме</div>
         </div>
 
         <div className="bg-scp-panel border border-gray-800 p-4 relative group">
@@ -272,27 +275,27 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
            </h3>
            <div className="h-48 w-full">
              <ResponsiveContainer width="100%" height="100%">
-               <BarChart data={infectionData}>
+               <BarChart data={incidentData}>
                  <XAxis dataKey="time" stroke="#444" fontSize={10} tickLine={false} axisLine={false} />
                  <YAxis stroke="#444" fontSize={10} tickLine={false} axisLine={false} />
                  <Tooltip contentStyle={{ backgroundColor: '#000', border: '1px solid #333', fontSize: '10px' }} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
-                 <Bar dataKey="level" fill="#d32f2f" radius={[2, 2, 0, 0]} />
+                 <Bar dataKey="value" fill="#d32f2f" radius={[2, 2, 0, 0]} />
                </BarChart>
              </ResponsiveContainer>
            </div>
         </div>
 
         <div className="bg-scp-panel border border-gray-800 p-6">
-           <h3 className="text-sm font-bold tracking-widest text-green-500 mb-6 flex items-center uppercase gap-2">
-             <Activity size={16} /> Фон Юма (SCP-008 Monitor)
+           <h3 className="text-sm font-bold tracking-widest text-scp-terminal mb-6 flex items-center uppercase gap-2">
+             <Radio size={16} /> Стабильность Фонда
            </h3>
            <div className="h-48 w-full">
              <ResponsiveContainer width="100%" height="100%">
-               <LineChart data={infectionData}>
-                 <XAxis dataKey="time" stroke="#22c55e" fontSize={10} tickLine={false} axisLine={false} />
-                 <YAxis stroke="#22c55e" fontSize={10} tickLine={false} axisLine={false} />
-                 <Tooltip contentStyle={{ backgroundColor: '#000', border: '1px solid #22c55e', fontSize: '10px' }} />
-                 <Line type="monotone" dataKey="level" stroke="#22c55e" strokeWidth={2} dot={{fill: '#22c55e'}} />
+               <LineChart data={statusData}>
+                 <XAxis dataKey="time" stroke="#33ff33" fontSize={10} tickLine={false} axisLine={false} />
+                 <YAxis stroke="#33ff33" domain={[90, 100]} fontSize={10} tickLine={false} axisLine={false} />
+                 <Tooltip contentStyle={{ backgroundColor: '#000', border: '1px solid #33ff33', fontSize: '10px' }} />
+                 <Line type="monotone" dataKey="level" stroke="#33ff33" strokeWidth={2} dot={{fill: '#33ff33'}} />
                </LineChart>
              </ResponsiveContainer>
            </div>
@@ -361,7 +364,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
                   ОТМЕНА
                 </button>
                 <button 
-                  type="submit"
+                  type="submit" 
                   disabled={isPublishingNews}
                   className="flex-1 py-4 bg-scp-terminal text-black text-xs font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-2"
                 >
