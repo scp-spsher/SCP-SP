@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Lock, Radio, Activity, Users, Globe, Skull, WifiOff, ClipboardList, Plus, User, CheckCircle, Clock, Trash2 } from 'lucide-react';
+import { AlertTriangle, Lock, Radio, Activity, Users, Globe, Skull, WifiOff, ClipboardList, Plus, User, CheckCircle, Clock, Trash2, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { SCPTask, TaskPriority, TaskStatus } from '../types';
@@ -35,6 +35,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
   
   // Task State
   const [tasks, setTasks] = useState<SCPTask[]>([]);
+  const [isTasksLoading, setIsTasksLoading] = useState(false);
   const [personnelList, setPersonnelList] = useState<{id: string, name: string}[]>([]);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
@@ -77,20 +78,42 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
   };
 
   const fetchTasks = async () => {
+    setIsTasksLoading(true);
     try {
+      // Используем более простой запрос. Если связь в БД настроена, 
+      // assigned_to(name) вернет объект с именем.
       const { data, error } = await supabase!
         .from('tasks')
-        .select('*, assigned_name:personnel(name)')
+        .select(`
+          *,
+          assigned_person:personnel!tasks_assigned_to_fkey(name)
+        `)
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
+      if (error) {
+        console.error("Supabase error fetching tasks:", error);
+        // Резервный запрос без Join, если Join падает
+        const { data: fallbackData } = await supabase!
+          .from('tasks')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (fallbackData) {
+          setTasks(fallbackData.map(t => ({
+            ...t,
+            assigned_name: 'Агент [ID: ' + t.assigned_to.slice(0,4) + ']'
+          })));
+        }
+      } else if (data) {
         setTasks(data.map(t => ({
           ...t,
-          assigned_name: t.assigned_name?.name || 'Не назначен'
+          assigned_name: (t.assigned_person as any)?.name || 'Не назначен'
         })));
       }
     } catch (e) {
-      console.error("Failed to fetch tasks", e);
+      console.error("Fatal error fetching tasks:", e);
+    } finally {
+      setIsTasksLoading(false);
     }
   };
 
@@ -109,18 +132,22 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
     try {
       const { data: { user } } = await supabase!.auth.getUser();
       const { error } = await supabase!.from('tasks').insert([{
-        ...newTask,
+        title: newTask.title,
+        description: newTask.description,
+        assigned_to: newTask.assigned_to,
+        priority: newTask.priority,
         created_by: user?.id,
         status: 'PENDING'
       }]);
 
-      if (!error) {
-        setIsTaskModalOpen(false);
-        setNewTask({ title: '', description: '', assigned_to: '', priority: 'MEDIUM' });
-        fetchTasks();
-      }
+      if (error) throw error;
+
+      setIsTaskModalOpen(false);
+      setNewTask({ title: '', description: '', assigned_to: '', priority: 'MEDIUM' });
+      fetchTasks();
     } catch (e) {
-      console.error(e);
+      console.error("Create task error:", e);
+      alert("ОШИБКА ПРИ СОЗДАНИИ ДИРЕКТИВЫ");
     } finally {
       setIsSubmittingTask(false);
     }
@@ -129,9 +156,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
   const handleDeleteTask = async (id: string) => {
     if (!confirm('ПОДТВЕРДИТЬ УДАЛЕНИЕ ДИРЕКТИВЫ?')) return;
     try {
-      await supabase!.from('tasks').delete().eq('id', id);
+      const { error } = await supabase!.from('tasks').delete().eq('id', id);
+      if (error) throw error;
       fetchTasks();
-    } catch (e) {}
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const getPriorityColor = (p: TaskPriority) => {
@@ -196,24 +226,38 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
       </div>
 
       {/* JOURNAL OF TASKS */}
-      <div className="bg-scp-panel border border-gray-800 flex flex-col overflow-hidden">
+      <div className="bg-scp-panel border border-gray-800 flex flex-col overflow-hidden shadow-lg">
         <div className="p-4 border-b border-gray-800 bg-gray-900/50 flex justify-between items-center">
-          <h3 className="text-sm font-bold tracking-widest text-gray-300 flex items-center gap-2">
+          <h3 className="text-sm font-bold tracking-widest text-gray-300 flex items-center gap-2 uppercase">
             <ClipboardList className="text-scp-terminal" size={18} /> ЖУРНАЛ ЗАДАНИЙ И ДИРЕКТИВ
           </h3>
-          {canAssignTasks && (
+          <div className="flex gap-2">
             <button 
-              onClick={() => setIsTaskModalOpen(true)}
-              className="flex items-center gap-2 bg-scp-terminal text-black px-3 py-1.5 text-[10px] font-black hover:bg-white transition-all uppercase tracking-widest"
+              onClick={fetchTasks}
+              className="p-1.5 text-gray-500 hover:text-scp-terminal transition-colors"
+              title="Обновить список"
             >
-              <Plus size={14} /> Сформировать приказ
+              <RefreshCw size={16} className={isTasksLoading ? 'animate-spin' : ''} />
             </button>
-          )}
+            {canAssignTasks && (
+              <button 
+                onClick={() => setIsTaskModalOpen(true)}
+                className="flex items-center gap-2 bg-scp-terminal text-black px-3 py-1.5 text-[10px] font-black hover:bg-white transition-all uppercase tracking-widest"
+              >
+                <Plus size={14} /> Сформировать приказ
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-800/50 font-mono">
-          {tasks.length > 0 ? tasks.map(task => (
-            <div key={task.id} className="p-4 hover:bg-white/5 transition-colors group relative">
+          {isTasksLoading && tasks.length === 0 ? (
+            <div className="p-12 flex flex-col items-center justify-center gap-4 text-scp-terminal">
+              <RefreshCw className="animate-spin" size={32} />
+              <span className="text-xs uppercase tracking-[0.2em] animate-pulse">Запрос к мейнфрейму...</span>
+            </div>
+          ) : tasks.length > 0 ? tasks.map(task => (
+            <div key={task.id} className="p-4 hover:bg-white/5 transition-colors group relative border-l-2 border-transparent hover:border-scp-terminal/30">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
                   <div className={`px-2 py-0.5 border text-[9px] font-black tracking-widest ${getPriorityColor(task.priority)}`}>
@@ -242,7 +286,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
               <div className="flex justify-between items-center text-[9px] text-gray-600 uppercase tracking-widest">
                 <div className="flex items-center gap-2">
                   <User size={10} />
-                  <span>Исполнитель: <span className="text-gray-400">{task.assigned_name}</span></span>
+                  <span>Исполнитель: <span className="text-gray-300 font-bold">{task.assigned_name}</span></span>
                 </div>
                 <div>Зарегистрировано: {new Date(task.created_at).toLocaleString()}</div>
               </div>
@@ -346,10 +390,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
                     value={newTask.priority}
                     onChange={e => setNewTask({...newTask, priority: e.target.value as TaskPriority})}
                   >
-                    <option value="LOW">НИЗКИЙ</option>
-                    <option value="MEDIUM">СРЕДНИЙ)</option>
-                    <option value="HIGH">ВЫСОКИЙ</option>
-                    <option value="CRITICAL">КРИТИЧЕСКИЙ</option>
+                    <option value="LOW">LOW (БЕЗОПАСНЫЙ)</option>
+                    <option value="MEDIUM">MEDIUM (ЕВКЛИД)</option>
+                    <option value="HIGH">HIGH (КЕТЕР)</option>
+                    <option value="CRITICAL">CRITICAL (ТАУМИЭЛЬ)</option>
                   </select>
                 </div>
               </div>
