@@ -54,6 +54,16 @@ export interface SCPFile {
   lastUpdated: string;
 }
 
+export interface SCPNews {
+  id: string;
+  title: string;
+  content: string;
+  author_name: string;
+  author_id: string;
+  created_at: string;
+  priority: 'NORMAL' | 'URGENT' | 'CRITICAL';
+}
+
 export type ReportType = 'INCIDENT' | 'OBSERVATION' | 'AUDIT' | 'REQUEST' | 'SECURITY';
 
 export interface SCPReport {
