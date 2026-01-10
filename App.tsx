@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { SecurityClearance } from './types';
 import Login from './components/Login';
@@ -137,7 +138,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     const safeClearance = Number(simulatedClearance || 0);
     switch (currentPage) {
-      case 'dashboard': return <Dashboard currentClearance={safeClearance} />;
+      case 'dashboard': return <Dashboard currentClearance={safeClearance} currentUser={currentUser} />;
       case 'profile': return (
         <Profile 
           user={viewedUser || currentUser} 
@@ -154,7 +155,7 @@ const App: React.FC = () => {
       case 'terminal': return <TerminalComponent />;
       case 'reports': return <Reports user={currentUser} effectiveClearance={safeClearance} onViewProfile={handleViewProfile} />;
       case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} onViewProfile={handleViewProfile} />;
-      default: return <Dashboard currentClearance={safeClearance} />;
+      default: return <Dashboard currentClearance={safeClearance} currentUser={currentUser} />;
     }
   };
 
