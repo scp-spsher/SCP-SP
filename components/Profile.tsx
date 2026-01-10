@@ -1,6 +1,7 @@
+
 import React, { useRef, useState, useMemo } from 'react';
 import { StoredUser, authService } from '../services/authService';
-import { User, Shield, MapPin, Briefcase, Crown, Upload, Camera, ArrowLeft } from 'lucide-react';
+import { User, Shield, MapPin, Briefcase, Crown, Upload, Camera, ArrowLeft, Edit3, Check, X, RefreshCw } from 'lucide-react';
 import { SCPLogo } from './SCPLogo';
 
 const SECRET_ADMIN_ID = '36046d5d-dde4-4cf6-a2de-794334b7af5c';
@@ -15,6 +16,9 @@ interface ProfileProps {
 
 const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpdate, onBack, isViewingSelf = true }) => {
   const [isUploading, setIsUploading] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState(user.name);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ТАЙНАЯ ЛОГИКА МАСКИРОВКИ ДЛЯ UI (только для уровня допуска)
@@ -54,6 +58,29 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
        alert(result.message);
     }
     setIsUploading(false);
+  };
+
+  const handleSaveName = async () => {
+    if (!newName.trim() || newName === user.name) {
+      setIsEditingName(false);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await authService.updateUser(user.id, { name: newName.trim() });
+      if (result.success) {
+        const updatedUser = { ...user, name: newName.trim() };
+        if (onProfileUpdate) onProfileUpdate(updatedUser);
+        setIsEditingName(false);
+      } else {
+        alert(result.message);
+      }
+    } catch (e) {
+      alert("ОШИБКА ОБНОВЛЕНИЯ ДАННЫХ");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -125,9 +152,55 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
 
            <div className="flex-1 space-y-4">
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><User size={10} /> Имя сотрудника</label>
-                <div className="text-xl font-bold text-white font-mono uppercase tracking-wide">{user.name}</div>
-                <div className="text-[9px] text-gray-600 font-mono mt-0.5">{user.id}</div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1"><User size={10} /> Имя сотрудника</span>
+                  {isViewingSelf && !isEditingName && (
+                    <button 
+                      onClick={() => { setIsEditingName(true); setNewName(user.name); }}
+                      className="text-gray-600 hover:text-scp-terminal transition-colors"
+                      title="Редактировать имя"
+                    >
+                      <Edit3 size={12} />
+                    </button>
+                  )}
+                </label>
+                
+                {isEditingName ? (
+                  <div className="mt-1 flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <input 
+                      autoFocus
+                      className="flex-1 bg-black border border-scp-terminal/50 p-2 text-sm text-scp-terminal font-mono outline-none focus:border-scp-terminal uppercase"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveName();
+                        if (e.key === 'Escape') setIsEditingName(false);
+                      }}
+                      disabled={isSaving}
+                    />
+                    <button 
+                      onClick={handleSaveName}
+                      disabled={isSaving}
+                      className="p-2 bg-scp-terminal text-black hover:bg-white transition-all disabled:opacity-50"
+                    >
+                      {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Check size={16} />}
+                    </button>
+                    <button 
+                      onClick={() => setIsEditingName(false)}
+                      disabled={isSaving}
+                      className="p-2 border border-gray-700 text-gray-500 hover:text-white transition-all disabled:opacity-50"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-xl font-bold text-white font-mono uppercase tracking-wide flex items-center gap-2">
+                      {user.name}
+                    </div>
+                    <div className="text-[9px] text-gray-600 font-mono mt-0.5">{user.id}</div>
+                  </>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
