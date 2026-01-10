@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Lock, Radio, Activity, Users, Globe, Skull, WifiOff, ClipboardList, Plus, User, CheckCircle, Clock, Trash2, RefreshCw, EyeOff, Briefcase } from 'lucide-react';
+import { AlertTriangle, Lock, Radio, Activity, Users, Skull, ClipboardList, Plus, Trash2, RefreshCw, Biohazard, Megaphone, Newspaper, Send, X, ShieldAlert } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { SCPTask, TaskPriority, TaskStatus, DEPARTMENTS } from '../types';
+import { SCPTask, TaskPriority, TaskStatus, DEPARTMENTS, SCPNews } from '../types';
 import { StoredUser } from '../services/authService';
 
 interface DashboardProps {
@@ -11,69 +11,82 @@ interface DashboardProps {
   currentUser: StoredUser;
 }
 
-const breachData = [
-  { name: 'Пн', breaches: 0 },
-  { name: 'Вт', breaches: 1 },
-  { name: 'Ср', breaches: 0 },
-  { name: 'Чт', breaches: 0 },
-  { name: 'Пт', breaches: 2 },
-  { name: 'Сб', breaches: 0 },
-  { name: 'Вс', breaches: 0 },
-];
-
-const energyData = [
-  { time: '00:00', level: 85 },
-  { time: '04:00', level: 82 },
-  { time: '08:00', level: 90 },
-  { time: '12:00', level: 95 },
-  { time: '16:00', level: 88 },
-  { time: '20:00', level: 84 },
+const infectionData = [
+  { time: '00:00', level: 0.01 },
+  { time: '04:00', level: 0.02 },
+  { time: '08:00', level: 0.05 },
+  { time: '12:00', level: 0.12 },
+  { time: '16:00', level: 0.08 },
+  { time: '20:00', level: 0.03 },
 ];
 
 const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) => {
   const [personnelCount, setPersonnelCount] = useState<number | string>(4102);
   const [dbStatus, setDbStatus] = useState<string>('OFFLINE');
-  const [dbStatusColor, setDbStatusColor] = useState<'green' | 'yellow' | 'red'>('yellow');
-  
-  // Task State
   const [tasks, setTasks] = useState<SCPTask[]>([]);
   const [isTasksLoading, setIsTasksLoading] = useState(false);
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
-  const [newTask, setNewTask] = useState({
-    title: '',
-    description: '',
-    assigned_department: '',
-    priority: 'MEDIUM' as TaskPriority
-  });
+  const [infectionLevel, setInfectionLevel] = useState(0.04);
+  
+  // News State
+  const [news, setNews] = useState<SCPNews[]>([]);
+  const [isNewsLoading, setIsNewsLoading] = useState(false);
+  const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
+  const [isPublishingNews, setIsPublishingNews] = useState(false);
+  const [newNews, setNewNews] = useState({ title: '', content: '', priority: 'NORMAL' as any });
 
   const isHighLevelView = currentClearance >= 5;
-  const canAssignTasks = currentClearance >= 4;
+  const isAdminService = currentUser.department === 'Административная служба' || isHighLevelView;
 
   useEffect(() => {
     if (isSupabaseConfigured()) {
       fetchDashboardData();
       fetchTasks();
+      fetchNews();
     }
+    
+    const interval = setInterval(() => {
+      setInfectionLevel(prev => Math.max(0.01, prev + (Math.random() - 0.5) * 0.02));
+    }, 5000);
+    return () => clearInterval(interval);
   }, [currentClearance, currentUser.id]);
 
   const fetchDashboardData = async () => {
     try {
-      const { count, error } = await supabase!
-        .from('personnel')
-        .select('*', { count: 'exact', head: true });
-      
-      if (error) {
-        setDbStatus('ОШИБКА БД');
-        setDbStatusColor('red');
-      } else {
-        setDbStatus('ONLINE');
-        setDbStatusColor('green');
-        if (count !== null) setPersonnelCount(count > 0 ? count : 4102);
-      }
+      const { count, error } = await supabase!.from('personnel').select('*', { count: 'exact', head: true });
+      if (!error) setDbStatus('ONLINE');
+      if (count !== null) setPersonnelCount(count > 0 ? count : 4102);
     } catch (e) {
       setDbStatus('АВТОНОМНО');
-      setDbStatusColor('yellow');
+    }
+  };
+
+  const fetchNews = async () => {
+    if (!isSupabaseConfigured()) return;
+    setIsNewsLoading(true);
+    try {
+      const { data, error } = await supabase!
+        .from('news')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (error) throw error;
+      if (data) setNews(data);
+    } catch (e) {
+      console.warn("Table 'news' might not exist yet. Using simulated news.");
+      setNews([
+        { 
+          id: '1', 
+          title: 'ПРОТОКОЛ ОБНОВЛЕНИЯ СЕТИ', 
+          content: 'Все терминалы Зоны-19 будут перезагружены в 03:00 для установки патча безопасности SCPNET v9.5.', 
+          author_name: 'Технический Отдел', 
+          author_id: 'system', 
+          created_at: new Date().toISOString(),
+          priority: 'NORMAL'
+        }
+      ]);
+    } finally {
+      setIsNewsLoading(false);
     }
   };
 
@@ -82,331 +95,286 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
     setIsTasksLoading(true);
     try {
       let query = supabase!.from('tasks').select('*');
-      
-      const isSuperAdmin = currentUser.isSuperAdmin || currentClearance >= 6;
-      const isAdminService = currentUser.department === 'Административная служба';
-
-      // Фильтрация видимости
-      if (isSuperAdmin) {
-          // OMNI/SuperAdmin видит всё
-      } else if (isAdminService) {
-          // Административная служба видит все задания, кроме ОВБ
+      if (currentUser.department === 'Административная служба') {
           query = query.neq('assigned_department', 'ОВБ');
-      } else {
-          // Остальные: только свои или задания своего отдела
+      } else if (!currentUser.isSuperAdmin && currentClearance < 6) {
           query = query.or(`created_by.eq.${currentUser.id},assigned_department.eq."${currentUser.department}"`);
       }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) {
-        console.error("Ошибка загрузки задач:", error.message || error);
-      } else if (data) {
-        setTasks(data);
-      }
-    } catch (e: any) {
-      console.error("Критическая ошибка fetchTasks:", e.message || e);
+      const { data } = await query.order('created_at', { ascending: false });
+      if (data) setTasks(data);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsTasksLoading(false);
     }
   };
 
-  const handleCreateTask = async (e: React.FormEvent) => {
+  const handlePublishNews = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTask.title || !newTask.assigned_department) return;
-
-    setIsSubmittingTask(true);
+    if (!newNews.title || !newNews.content) return;
+    
+    setIsPublishingNews(true);
     try {
-      const { error } = await supabase!.from('tasks').insert([{
-        title: newTask.title.toUpperCase(),
-        description: newTask.description,
-        assigned_department: newTask.assigned_department,
-        priority: newTask.priority,
-        created_by: currentUser.id,
-        status: 'PENDING'
-      }]);
+      const newsItem = {
+        title: newNews.title.toUpperCase(),
+        content: newNews.content,
+        author_name: currentUser.name,
+        author_id: currentUser.id,
+        priority: newNews.priority
+      };
 
-      if (error) {
-        console.error("Supabase insert error:", error);
-        throw new Error(error.message || "Ошибка вставки данных");
-      }
-
-      setIsTaskModalOpen(false);
-      setNewTask({ title: '', description: '', assigned_department: '', priority: 'MEDIUM' });
-      fetchTasks();
-    } catch (e: any) {
-      console.error("Full Create task error:", e);
-      alert(`ОШИБКА ДИРЕКТИВЫ: ${e.message || "СБОЙ БАЗЫ ДАННЫХ"}`);
-    } finally {
-      setIsSubmittingTask(false);
-    }
-  };
-
-  const handleDeleteTask = async (id: string) => {
-    if (!confirm('ПОДТВЕРДИТЬ УДАЛЕНИЕ ДИРЕКТИВЫ?')) return;
-    try {
-      const { error } = await supabase!.from('tasks').delete().eq('id', id);
+      const { error } = await supabase!.from('news').insert([newsItem]);
       if (error) throw error;
-      fetchTasks();
+
+      setIsNewsModalOpen(false);
+      setNewNews({ title: '', content: '', priority: 'NORMAL' });
+      fetchNews();
     } catch (e: any) {
-      console.error("Delete task error:", e.message || e);
+      alert("ОШИБКА ПУБЛИКАЦИИ: " + (e.message || "СБОЙ БАЗЫ ДАННЫХ"));
+      // Фоллбэк: добавить локально если таблицы нет
+      const mockNews: SCPNews = {
+          id: Date.now().toString(),
+          title: newNews.title.toUpperCase(),
+          content: newNews.content,
+          author_name: currentUser.name,
+          author_id: currentUser.id,
+          priority: newNews.priority,
+          created_at: new Date().toISOString()
+      };
+      setNews(prev => [mockNews, ...prev]);
+      setIsNewsModalOpen(false);
+    } finally {
+      setIsPublishingNews(false);
     }
   };
-
-  const getPriorityColor = (p: TaskPriority) => {
-    switch (p) {
-      case 'CRITICAL': return 'text-red-500 border-red-500 bg-red-950/20 animate-pulse';
-      case 'HIGH': return 'text-orange-500 border-orange-500 bg-orange-950/10';
-      case 'MEDIUM': return 'text-yellow-500 border-yellow-500 bg-yellow-950/10';
-      default: return 'text-blue-400 border-blue-400 bg-blue-950/10';
-    }
-  };
-
-  const getStatusIcon = (s: TaskStatus) => {
-    switch (s) {
-      case 'COMPLETED': return <CheckCircle size={14} className="text-green-500" />;
-      case 'FAILED': return <Skull size={14} className="text-red-600" />;
-      case 'IN_PROGRESS': return <Activity size={14} className="text-blue-400 animate-spin" />;
-      default: return <Clock size={14} className="text-gray-500" />;
-    }
-  };
-
-  const titleColor = isHighLevelView ? 'text-yellow-500' : 'text-scp-text';
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between border-b border-gray-800 pb-4">
-        <h2 className={`text-2xl font-bold tracking-widest ${titleColor} transition-colors duration-500 uppercase`}>
-          {isHighLevelView ? 'ГЛАЗ БОГА :: ТОЛЬКО ДЛЯ O5' : 'СТАТУС ЗОНЫ-19'}
+        <h2 className={`text-2xl font-bold tracking-widest ${isHighLevelView ? 'text-yellow-500' : 'text-scp-text'} uppercase`}>
+          {isHighLevelView ? 'ГЛАЗ БОГА :: SCPNET DASHBOARD' : 'СТАТУС ЗОНЫ-19'}
         </h2>
-        <div className={`flex items-center gap-2 px-3 py-1 rounded border ${dbStatusColor === 'green' ? 'text-green-500 bg-green-900/10 border-green-900' : 'text-yellow-500 bg-yellow-900/10 border-yellow-900'}`}>
-           <div className={`w-2 h-2 rounded-full animate-pulse ${dbStatusColor === 'green' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-           <span className="text-xs font-bold tracking-wider uppercase font-mono">КАНАЛ: {dbStatus}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-3 py-1 border border-green-900 bg-green-950/20 text-green-500 rounded">
+            <Biohazard size={16} className="animate-pulse" />
+            <span className="text-[10px] font-black uppercase font-mono">BIO-LEVEL: SAFE</span>
+          </div>
+          <div className="text-xs font-bold text-scp-terminal border border-gray-800 px-3 py-1">КАНАЛ: {dbStatus}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-scp-panel border border-gray-800 p-4 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <AlertTriangle size={64} className={isHighLevelView ? "text-yellow-500" : "text-scp-accent"} />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-scp-panel border border-gray-800 p-4 relative group hover:border-green-900 transition-colors">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30">
+            <Biohazard size={48} className="text-green-500" />
           </div>
-          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">СТАТУС DEFCON</h3>
-          <div className={`text-3xl font-bold ${isHighLevelView ? 'text-red-500' : 'text-scp-text'}`}>УРОВЕНЬ 4</div>
-          <div className="text-[10px] text-gray-400 mt-2 uppercase tracking-tighter">Все сектора в норме.</div>
+          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">ИНФЕКЦИОННЫЙ ФОН</h3>
+          <div className="text-3xl font-bold text-green-500">{infectionLevel.toFixed(3)}%</div>
+          <div className="text-[10px] text-green-800 mt-2 uppercase font-black">SCP-008: СТАБИЛЬНО</div>
         </div>
 
-        <div className="bg-scp-panel border border-gray-800 p-4 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Lock size={64} className={isHighLevelView ? "text-yellow-500" : "text-blue-500"} />
-          </div>
+        <div className="bg-scp-panel border border-gray-800 p-4 relative group">
+          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">ДЕФКОН</h3>
+          <div className="text-3xl font-bold text-red-500">УРОВЕНЬ 4</div>
+          <div className="text-[10px] text-gray-400 mt-2 uppercase">Штатный режим</div>
+        </div>
+
+        <div className="bg-scp-panel border border-gray-800 p-4 relative group">
           <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">ЦЕЛОСТНОСТЬ ПЕРИМЕТРА</h3>
-          <div className={`text-3xl font-bold ${isHighLevelView ? 'text-yellow-500' : 'text-blue-400'}`}>98.4%</div>
-          <div className="text-[10px] text-yellow-500 mt-2 uppercase tracking-tighter">Флуктуации в Секторе 7 [Евклид].</div>
+          <div className="text-3xl font-bold text-blue-400">99.8%</div>
+          <div className="text-[10px] text-gray-400 mt-2 uppercase">Все сектора герметичны</div>
         </div>
 
-        <div className="bg-scp-panel border border-gray-800 p-4 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Users size={64} className={isHighLevelView ? "text-yellow-500" : "text-purple-500"} />
-          </div>
-          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">ПЕРСОНАЛ НА МЕСТЕ</h3>
-          <div className={`text-3xl font-bold ${isHighLevelView ? 'text-yellow-500' : 'text-purple-400'}`}>{personnelCount}</div>
-          <div className="text-[10px] text-gray-400 mt-2 uppercase tracking-tighter">{dbStatus === 'ONLINE' ? 'Синхронизация с Мейнфреймом' : 'Локальный реестр'}</div>
+        <div className="bg-scp-panel border border-gray-800 p-4 relative group">
+          <h3 className="text-gray-500 text-[10px] font-bold tracking-widest mb-1 uppercase">АКТИВНЫЙ ПЕРСОНАЛ</h3>
+          <div className="text-3xl font-bold text-scp-text">{personnelCount}</div>
+          <div className="text-[10px] text-gray-400 mt-2 uppercase">Биометрия синхронизирована</div>
         </div>
       </div>
 
-      <div className="bg-scp-panel border border-gray-800 flex flex-col overflow-hidden shadow-lg">
-        <div className="p-4 border-b border-gray-800 bg-gray-900/50 flex justify-between items-center">
-          <h3 className="text-sm font-bold tracking-widest text-gray-300 flex items-center gap-2 uppercase">
-            <ClipboardList className="text-scp-terminal" size={18} /> ЖУРНАЛ ЗАДАНИЙ И ДИРЕКТИВ
-          </h3>
-          <div className="flex gap-2">
-            <button 
-              onClick={fetchTasks}
-              className="p-1.5 text-gray-500 hover:text-scp-terminal transition-colors"
-              title="Обновить список"
-            >
-              <RefreshCw size={16} className={isTasksLoading ? 'animate-spin' : ''} />
-            </button>
-            {canAssignTasks && (
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* News Feed - Left Side */}
+        <div className="lg:col-span-4 bg-scp-panel border border-gray-800 flex flex-col shadow-lg overflow-hidden">
+          <div className="p-4 border-b border-gray-800 bg-gray-900/50 flex justify-between items-center">
+            <h3 className="text-sm font-bold tracking-widest text-white flex items-center gap-2 uppercase">
+              <Megaphone className="text-scp-accent" size={18} /> Лента новостей
+            </h3>
+            {isAdminService && (
               <button 
-                onClick={() => setIsTaskModalOpen(true)}
-                className="flex items-center gap-2 bg-scp-terminal text-black px-3 py-1.5 text-[10px] font-black hover:bg-white transition-all uppercase tracking-widest"
+                onClick={() => setIsNewsModalOpen(true)}
+                className="p-1.5 text-scp-terminal hover:bg-scp-terminal hover:text-black transition-all border border-scp-terminal/30"
+                title="Опубликовать сводку"
               >
-                <Plus size={14} /> Сформировать приказ
+                <Plus size={16} />
               </button>
             )}
           </div>
-        </div>
-        
-        <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-800/50 font-mono">
-          {isTasksLoading && tasks.length === 0 ? (
-            <div className="p-12 flex flex-col items-center justify-center gap-4 text-scp-terminal">
-              <RefreshCw className="animate-spin" size={32} />
-              <span className="text-xs uppercase tracking-[0.2em] animate-pulse">Запрос к мейнфрейму...</span>
-            </div>
-          ) : tasks.length > 0 ? tasks.map(task => {
-            const isMine = task.created_by === currentUser.id;
-            return (
-              <div key={task.id} className="p-4 hover:bg-white/5 transition-colors group relative border-l-2 border-transparent hover:border-scp-terminal/30">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className={`px-2 py-0.5 border text-[9px] font-black tracking-widest ${getPriorityColor(task.priority)}`}>
-                      {task.priority}
-                    </div>
-                    <h4 className="font-bold text-sm text-white uppercase tracking-tight">
-                        {task.title}
-                        {isMine && <span className="ml-2 text-[8px] text-scp-terminal border border-scp-terminal px-1">ВАШ ПРИКАЗ</span>}
-                    </h4>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                      {getStatusIcon(task.status)}
-                      <span className="uppercase">{task.status}</span>
-                    </div>
-                    {(task.created_by === currentUser.id || isHighLevelView) && (
-                      <button 
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 transition-all p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
+          <div className="flex-1 max-h-[500px] overflow-y-auto font-mono divide-y divide-gray-800/30">
+            {isNewsLoading ? (
+               <div className="p-12 flex justify-center"><RefreshCw className="animate-spin text-gray-600" /></div>
+            ) : news.length > 0 ? news.map(item => (
+              <div key={item.id} className={`p-4 hover:bg-white/5 transition-colors border-l-2 ${item.priority === 'CRITICAL' ? 'border-red-600 bg-red-950/5' : 'border-transparent'}`}>
+                <div className="flex justify-between items-start mb-1">
+                   <span className={`text-[8px] font-black px-1 ${item.priority === 'CRITICAL' ? 'bg-red-600 text-white' : 'text-scp-terminal'}`}>
+                     {item.priority}
+                   </span>
+                   <span className="text-[8px] text-gray-600 italic">
+                     {new Date(item.created_at).toLocaleDateString()}
+                   </span>
                 </div>
-                <p className="text-xs text-gray-400 mb-3 leading-relaxed border-l border-gray-800 pl-3">
-                  {task.description}
-                </p>
-                <div className="flex justify-between items-center text-[9px] text-gray-600 uppercase tracking-widest">
-                  <div className="flex items-center gap-2">
-                    <Briefcase size={10} />
-                    <span>Целевой отдел: <span className="text-scp-terminal font-bold">{task.assigned_department}</span></span>
-                  </div>
-                  <div>Регистрация: {new Date(task.created_at).toLocaleString()}</div>
+                <h4 className="font-black text-xs text-white mb-2 leading-tight uppercase tracking-tight">{item.title}</h4>
+                <p className="text-[10px] text-gray-400 leading-relaxed mb-3">{item.content}</p>
+                <div className="text-[8px] text-gray-600 uppercase flex items-center gap-1">
+                  <Users size={10} /> Автор: {item.author_name}
                 </div>
               </div>
-            );
-          }) : (
-            <div className="p-12 text-center text-gray-600 italic text-xs uppercase tracking-[0.3em]">
-              Директивы отсутствуют или у вас недостаточно прав для их просмотра.
-            </div>
-          )}
+            )) : (
+              <div className="p-12 text-center text-gray-700 text-[10px] uppercase">Новостей пока нет</div>
+            )}
+          </div>
+        </div>
+
+        {/* Operational Directives - Right Side */}
+        <div className="lg:col-span-8 bg-scp-panel border border-gray-800 flex flex-col shadow-lg overflow-hidden">
+          <div className="p-4 border-b border-gray-800 bg-gray-900/50 flex justify-between items-center">
+            <h3 className="text-sm font-bold tracking-widest text-gray-300 flex items-center gap-2 uppercase">
+              <ClipboardList className="text-scp-terminal" size={18} /> Оперативные директивы
+            </h3>
+            <button onClick={fetchTasks} className="p-1.5 text-gray-500 hover:text-scp-terminal transition-colors">
+              <RefreshCw size={16} className={isTasksLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          <div className="flex-1 max-h-[500px] overflow-y-auto divide-y divide-gray-800/50 font-mono">
+            {tasks.length > 0 ? tasks.map(task => (
+              <div key={task.id} className="p-4 hover:bg-white/5 transition-colors group">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 border text-[9px] font-black ${task.priority === 'CRITICAL' ? 'text-red-500 border-red-500' : 'text-gray-500 border-gray-500'}`}>
+                      {task.priority}
+                    </span>
+                    <h4 className="font-bold text-xs text-white uppercase">{task.title}</h4>
+                  </div>
+                  <span className="text-[9px] text-gray-600">{task.assigned_department}</span>
+                </div>
+                <p className="text-[10px] text-gray-500 leading-normal">{task.description}</p>
+              </div>
+            )) : (
+              <div className="p-12 text-center text-gray-600 text-[10px] uppercase tracking-widest">Активные директивы отсутствуют</div>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-scp-panel border border-gray-800 p-6">
-           <h3 className="text-sm font-bold tracking-widest text-gray-400 mb-6 flex items-center uppercase">
-             <Activity className="mr-2 w-4 h-4" /> ОТЧЕТ ОБ ИНЦИДЕНТАХ (НЕДЕЛЯ)
+           <h3 className="text-sm font-bold tracking-widest text-gray-400 mb-6 flex items-center uppercase gap-2">
+             <Activity size={16} /> Индексы инцидентов
            </h3>
-           <div className="h-64 w-full">
+           <div className="h-48 w-full">
              <ResponsiveContainer width="100%" height="100%">
-               <BarChart data={breachData}>
-                 <XAxis dataKey="name" stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                 <YAxis stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                 <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
-                 <Bar dataKey="breaches" fill={isHighLevelView ? '#eab308' : "#d32f2f"} radius={[2, 2, 0, 0]} />
+               <BarChart data={infectionData}>
+                 <XAxis dataKey="time" stroke="#444" fontSize={10} tickLine={false} axisLine={false} />
+                 <YAxis stroke="#444" fontSize={10} tickLine={false} axisLine={false} />
+                 <Tooltip contentStyle={{ backgroundColor: '#000', border: '1px solid #333', fontSize: '10px' }} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
+                 <Bar dataKey="level" fill="#d32f2f" radius={[2, 2, 0, 0]} />
                </BarChart>
              </ResponsiveContainer>
            </div>
         </div>
 
         <div className="bg-scp-panel border border-gray-800 p-6">
-           <h3 className="text-sm font-bold tracking-widest text-gray-400 mb-6 flex items-center uppercase">
-             <Radio className="mr-2 w-4 h-4" /> {isHighLevelView ? 'ГЛОБАЛЬНЫЙ ФОН ЮМА' : 'СТАБИЛЬНОСТЬ ЯКОРЕЙ РЕАЛЬНОСТЬ'}
+           <h3 className="text-sm font-bold tracking-widest text-green-500 mb-6 flex items-center uppercase gap-2">
+             <Activity size={16} /> Фон Юма (SCP-008 Monitor)
            </h3>
-           <div className="h-64 w-full">
+           <div className="h-48 w-full">
              <ResponsiveContainer width="100%" height="100%">
-               <LineChart data={energyData}>
-                 <XAxis dataKey="time" stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                 <YAxis domain={[0, 100]} stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                 <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }} />
-                 <Line type="monotone" dataKey="level" stroke={isHighLevelView ? '#eab308' : "#33ff33"} strokeWidth={2} dot={{fill: isHighLevelView ? '#eab308' : '#33ff33'}} />
+               <LineChart data={infectionData}>
+                 <XAxis dataKey="time" stroke="#22c55e" fontSize={10} tickLine={false} axisLine={false} />
+                 <YAxis stroke="#22c55e" fontSize={10} tickLine={false} axisLine={false} />
+                 <Tooltip contentStyle={{ backgroundColor: '#000', border: '1px solid #22c55e', fontSize: '10px' }} />
+                 <Line type="monotone" dataKey="level" stroke="#22c55e" strokeWidth={2} dot={{fill: '#22c55e'}} />
                </LineChart>
              </ResponsiveContainer>
            </div>
         </div>
       </div>
 
-      {/* CREATE TASK MODAL */}
-      {isTaskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-scp-panel border border-gray-700 w-full max-w-lg shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden">
+      {/* PUBLISH NEWS MODAL */}
+      {isNewsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-scp-panel border border-gray-700 w-full max-w-lg shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden">
             <div className="p-4 border-b border-gray-700 bg-gray-900/50 flex justify-between items-center">
-              <h3 className="text-sm font-black tracking-widest text-white uppercase font-mono">Формирование приказа фонда</h3>
-              <button onClick={() => setIsTaskModalOpen(false)} className="text-gray-500 hover:text-white transition-colors">
-                <Skull size={18} />
+              <h3 className="text-xs font-black tracking-widest text-white uppercase font-mono flex items-center gap-2">
+                <Newspaper size={16} className="text-scp-terminal" /> Публикация в общий канал
+              </h3>
+              <button onClick={() => setIsNewsModalOpen(false)} className="text-gray-500 hover:text-white transition-colors">
+                <X size={20} />
               </button>
             </div>
             
-            <form onSubmit={handleCreateTask} className="p-6 space-y-4 font-mono">
+            <form onSubmit={handlePublishNews} className="p-6 space-y-4 font-mono">
               <div className="space-y-1">
-                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Объект / Цель</label>
+                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Заголовок сводки</label>
                 <input 
                   required
-                  placeholder="НАИМЕНОВАНИЕ ОПЕРАЦИИ..."
-                  className="w-full bg-black border border-gray-800 p-3 text-sm text-scp-terminal focus:border-scp-terminal outline-none"
-                  value={newTask.title}
-                  onChange={e => setNewTask({...newTask, title: e.target.value})}
+                  placeholder="ВВЕДИТЕ ТЕМУ СООБЩЕНИЯ..."
+                  className="w-full bg-black border border-gray-800 p-3 text-sm text-scp-terminal focus:border-scp-terminal outline-none uppercase font-black"
+                  value={newNews.title}
+                  onChange={e => setNewNews({...newNews, title: e.target.value})}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Описание директивы</label>
+                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Текст публикации</label>
                 <textarea 
                   required
-                  rows={4}
-                  placeholder="ПОШАГОВЫЙ ИНСТРУКТАЖ..."
-                  className="w-full bg-black border border-gray-800 p-3 text-sm text-gray-300 focus:border-scp-terminal outline-none"
-                  value={newTask.description}
-                  onChange={e => setNewTask({...newTask, description: e.target.value})}
+                  rows={5}
+                  placeholder="ДЕТАЛЬНОЕ СООБЩЕНИЕ ДЛЯ ПЕРСОНАЛА..."
+                  className="w-full bg-black border border-gray-800 p-3 text-sm text-gray-300 focus:border-scp-terminal outline-none leading-relaxed"
+                  value={newNews.content}
+                  onChange={e => setNewNews({...newNews, content: e.target.value})}
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[9px] text-gray-500 uppercase tracking-widest">Целевой отдел</label>
-                  <select 
-                    required
-                    className="w-full bg-black border border-gray-800 p-3 text-xs text-scp-terminal outline-none"
-                    value={newTask.assigned_department}
-                    onChange={e => setNewTask({...newTask, assigned_department: e.target.value})}
-                  >
-                    <option value="">ВЫБЕРИТЕ ОТДЕЛ</option>
-                    {DEPARTMENTS.map(dept => (
-                      <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] text-gray-500 uppercase tracking-widest">Приоритет</label>
-                  <select 
-                    className="w-full bg-black border border-gray-800 p-3 text-xs text-scp-terminal outline-none"
-                    value={newTask.priority}
-                    onChange={e => setNewTask({...newTask, priority: e.target.value as TaskPriority})}
-                  >
-                    <option value="LOW">LOW (БЕЗОПАСНЫЙ)</option>
-                    <option value="MEDIUM">MEDIUM (ЕВКЛИД)</option>
-                    <option value="HIGH">HIGH (КЕТЕР)</option>
-                    <option value="CRITICAL">CRITICAL (ТАУМИЭЛЬ)</option>
-                  </select>
+              <div className="space-y-1">
+                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Приоритет уведомления</label>
+                <div className="flex gap-2">
+                  {['NORMAL', 'URGENT', 'CRITICAL'].map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setNewNews({...newNews, priority: p})}
+                      className={`flex-1 py-2 text-[10px] font-black border transition-all ${newNews.priority === p ? 'bg-scp-terminal text-black border-scp-terminal' : 'bg-transparent text-gray-600 border-gray-800 hover:border-gray-600'}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               <div className="pt-4 flex gap-3">
                 <button 
                   type="button"
-                  onClick={() => setIsTaskModalOpen(false)}
+                  onClick={() => setIsNewsModalOpen(false)}
                   className="flex-1 py-4 border border-gray-700 text-gray-500 text-xs font-black uppercase hover:text-white transition-all"
                 >
                   ОТМЕНА
                 </button>
                 <button 
                   type="submit"
-                  disabled={isSubmittingTask}
-                  className="flex-1 py-4 bg-scp-terminal text-black text-xs font-black uppercase hover:bg-white transition-all shadow-[0_0_20px_rgba(51,255,51,0.2)]"
+                  disabled={isPublishingNews}
+                  className="flex-1 py-4 bg-scp-terminal text-black text-xs font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-2"
                 >
-                  {isSubmittingTask ? 'РЕГИСТРАЦИЯ...' : 'УТВЕРДИТЬ'}
+                  {isPublishingNews ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
+                  ОПУБЛИКОВАТЬ
                 </button>
+              </div>
+
+              <div className="bg-yellow-950/20 border border-yellow-900/50 p-2 flex items-start gap-2">
+                <ShieldAlert size={14} className="text-yellow-600 shrink-0 mt-0.5" />
+                <p className="text-[8px] text-yellow-700 uppercase leading-tight font-black">
+                  ВНИМАНИЕ: Все публикации в этом канале логируются и подлежат проверке отделом внутренней безопасности (ОВБ).
+                </p>
               </div>
             </form>
           </div>
