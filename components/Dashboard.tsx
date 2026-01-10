@@ -346,10 +346,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
                     value={newTask.priority}
                     onChange={e => setNewTask({...newTask, priority: e.target.value as TaskPriority})}
                   >
-                    <option value="LOW">LOW (БЕЗОПАСНЫЙ)</option>
-                    <option value="MEDIUM">MEDIUM (ЕВКЛИД)</option>
-                    <option value="HIGH">HIGH (КЕТЕР)</option>
-                    <option value="CRITICAL">CRITICAL (ТАУМИЭЛЬ)</option>
+                    <option value="LOW">НИЗКИЙ</option>
+                    <option value="MEDIUM">СРЕДНИЙ)</option>
+                    <option value="HIGH">ВЫСОКИЙ</option>
+                    <option value="CRITICAL">КРИТИЧЕСКИЙ</option>
                   </select>
                 </div>
               </div>
