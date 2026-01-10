@@ -1,12 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Lock, Radio, Activity, Users, Globe, Skull, WifiOff, ClipboardList, Plus, User, CheckCircle, Clock, Trash2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Lock, Radio, Activity, Users, Globe, Skull, WifiOff, ClipboardList, Plus, User, CheckCircle, Clock, Trash2, RefreshCw, EyeOff, Briefcase } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { SCPTask, TaskPriority, TaskStatus } from '../types';
+import { SCPTask, TaskPriority, TaskStatus, DEPARTMENTS } from '../types';
+import { StoredUser } from '../services/authService';
 
 interface DashboardProps {
   currentClearance: number;
+  currentUser: StoredUser;
 }
 
 const breachData = [
@@ -28,7 +30,7 @@ const energyData = [
   { time: '20:00', level: 84 },
 ];
 
-const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
+const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) => {
   const [personnelCount, setPersonnelCount] = useState<number | string>(4102);
   const [dbStatus, setDbStatus] = useState<string>('OFFLINE');
   const [dbStatusColor, setDbStatusColor] = useState<'green' | 'yellow' | 'red'>('yellow');
@@ -36,13 +38,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
   // Task State
   const [tasks, setTasks] = useState<SCPTask[]>([]);
   const [isTasksLoading, setIsTasksLoading] = useState(false);
-  const [personnelList, setPersonnelList] = useState<{id: string, name: string}[]>([]);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
-    assigned_to: '',
+    assigned_department: '',
     priority: 'MEDIUM' as TaskPriority
   });
 
@@ -53,9 +54,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
     if (isSupabaseConfigured()) {
       fetchDashboardData();
       fetchTasks();
-      if (canAssignTasks) fetchPersonnel();
     }
-  }, [currentClearance]);
+  }, [currentClearance, currentUser.id]);
 
   const fetchDashboardData = async () => {
     try {
@@ -80,35 +80,23 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
   const fetchTasks = async () => {
     setIsTasksLoading(true);
     try {
-      // Используем более простой запрос. Если связь в БД настроена, 
-      // assigned_to(name) вернет объект с именем.
-      const { data, error } = await supabase!
-        .from('tasks')
-        .select(`
-          *,
-          assigned_person:personnel!tasks_assigned_to_fkey(name)
-        `)
-        .order('created_at', { ascending: false });
+      // Фильтрация: задания видны только тем, кто их выдал, и тем отделам, кому выдано.
+      // Примечание: O5/Админы (уровень 5+) по лору видят всё, но мы строго следуем запросу.
+      // Если нужно, чтобы O5 видели всё, можно добавить условие.
+      
+      let query = supabase!.from('tasks').select('*');
+      
+      // Если это не супер-админ в режиме OMNI, применяем фильтрацию видимости
+      if (!currentUser.isSuperAdmin || currentClearance < 6) {
+          query = query.or(`created_by.eq.${currentUser.id},assigned_department.eq."${currentUser.department}"`);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error("Supabase error fetching tasks:", error);
-        // Резервный запрос без Join, если Join падает
-        const { data: fallbackData } = await supabase!
-          .from('tasks')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (fallbackData) {
-          setTasks(fallbackData.map(t => ({
-            ...t,
-            assigned_name: 'Агент [ID: ' + t.assigned_to.slice(0,4) + ']'
-          })));
-        }
       } else if (data) {
-        setTasks(data.map(t => ({
-          ...t,
-          assigned_name: (t.assigned_person as any)?.name || 'Не назначен'
-        })));
+        setTasks(data);
       }
     } catch (e) {
       console.error("Fatal error fetching tasks:", e);
@@ -117,33 +105,25 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
     }
   };
 
-  const fetchPersonnel = async () => {
-    try {
-      const { data } = await supabase!.from('personnel').select('id, name').order('name');
-      if (data) setPersonnelList(data);
-    } catch (e) {}
-  };
-
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTask.title || !newTask.assigned_to) return;
+    if (!newTask.title || !newTask.assigned_department) return;
 
     setIsSubmittingTask(true);
     try {
-      const { data: { user } } = await supabase!.auth.getUser();
       const { error } = await supabase!.from('tasks').insert([{
         title: newTask.title,
         description: newTask.description,
-        assigned_to: newTask.assigned_to,
+        assigned_department: newTask.assigned_department,
         priority: newTask.priority,
-        created_by: user?.id,
+        created_by: currentUser.id,
         status: 'PENDING'
       }]);
 
       if (error) throw error;
 
       setIsTaskModalOpen(false);
-      setNewTask({ title: '', description: '', assigned_to: '', priority: 'MEDIUM' });
+      setNewTask({ title: '', description: '', assigned_department: '', priority: 'MEDIUM' });
       fetchTasks();
     } catch (e) {
       console.error("Create task error:", e);
@@ -256,44 +236,50 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
               <RefreshCw className="animate-spin" size={32} />
               <span className="text-xs uppercase tracking-[0.2em] animate-pulse">Запрос к мейнфрейму...</span>
             </div>
-          ) : tasks.length > 0 ? tasks.map(task => (
-            <div key={task.id} className="p-4 hover:bg-white/5 transition-colors group relative border-l-2 border-transparent hover:border-scp-terminal/30">
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center gap-3">
-                  <div className={`px-2 py-0.5 border text-[9px] font-black tracking-widest ${getPriorityColor(task.priority)}`}>
-                    {task.priority}
+          ) : tasks.length > 0 ? tasks.map(task => {
+            const isMine = task.created_by === currentUser.id;
+            return (
+              <div key={task.id} className="p-4 hover:bg-white/5 transition-colors group relative border-l-2 border-transparent hover:border-scp-terminal/30">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`px-2 py-0.5 border text-[9px] font-black tracking-widest ${getPriorityColor(task.priority)}`}>
+                      {task.priority}
+                    </div>
+                    <h4 className="font-bold text-sm text-white uppercase tracking-tight">
+                        {task.title}
+                        {isMine && <span className="ml-2 text-[8px] text-scp-terminal border border-scp-terminal px-1">ВАШ ЗАКАЗ</span>}
+                    </h4>
                   </div>
-                  <h4 className="font-bold text-sm text-white uppercase tracking-tight">{task.title}</h4>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                      {getStatusIcon(task.status)}
+                      <span className="uppercase">{task.status}</span>
+                    </div>
+                    {canAssignTasks && (task.created_by === currentUser.id || isHighLevelView) && (
+                      <button 
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 transition-all p-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                    {getStatusIcon(task.status)}
-                    <span className="uppercase">{task.status}</span>
+                <p className="text-xs text-gray-400 mb-3 leading-relaxed border-l border-gray-800 pl-3">
+                  {task.description}
+                </p>
+                <div className="flex justify-between items-center text-[9px] text-gray-600 uppercase tracking-widest">
+                  <div className="flex items-center gap-2">
+                    <Briefcase size={10} />
+                    <span>Целевой отдел: <span className="text-scp-terminal font-bold">{task.assigned_department}</span></span>
                   </div>
-                  {canAssignTasks && (
-                    <button 
-                      onClick={() => handleDeleteTask(task.id)}
-                      className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 transition-all p-1"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <div>Зарегистрировано: {new Date(task.created_at).toLocaleString()}</div>
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mb-3 leading-relaxed border-l border-gray-800 pl-3">
-                {task.description}
-              </p>
-              <div className="flex justify-between items-center text-[9px] text-gray-600 uppercase tracking-widest">
-                <div className="flex items-center gap-2">
-                  <User size={10} />
-                  <span>Исполнитель: <span className="text-gray-300 font-bold">{task.assigned_name}</span></span>
-                </div>
-                <div>Зарегистрировано: {new Date(task.created_at).toLocaleString()}</div>
-              </div>
-            </div>
-          )) : (
+            );
+          }) : (
             <div className="p-12 text-center text-gray-600 italic text-xs uppercase tracking-[0.3em]">
-              Директивы отсутствуют. Статус: Норма.
+              Директивы отсутствуют или у вас недостаточно прав для их просмотра.
             </div>
           )}
         </div>
@@ -370,16 +356,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance }) => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[9px] text-gray-500 uppercase tracking-widest">Исполнитель</label>
+                  <label className="text-[9px] text-gray-500 uppercase tracking-widest">Целевой отдел</label>
                   <select 
                     required
                     className="w-full bg-black border border-gray-800 p-3 text-xs text-scp-terminal outline-none"
-                    value={newTask.assigned_to}
-                    onChange={e => setNewTask({...newTask, assigned_to: e.target.value})}
+                    value={newTask.assigned_department}
+                    onChange={e => setNewTask({...newTask, assigned_department: e.target.value})}
                   >
-                    <option value="">ВЫБЕРИТЕ АГЕНТА</option>
-                    {personnelList.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                    <option value="">ВЫБЕРИТЕ ОТДЕЛ</option>
+                    {DEPARTMENTS.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
                     ))}
                   </select>
                 </div>
