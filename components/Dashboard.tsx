@@ -127,14 +127,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
       fetchTasks();
     } catch (e) {
       console.error("Create task error:", e);
-      alert("ОШИБКА ПРИ СОЗДАНИИ ДИРЕКТИВЫ");
+      alert("ОШИБКА ПРИ СОЗДАНИИ ЗАДАНИЯ");
     } finally {
       setIsSubmittingTask(false);
     }
   };
 
   const handleDeleteTask = async (id: string) => {
-    if (!confirm('ПОДТВЕРДИТЬ УДАЛЕНИЕ ДИРЕКТИВЫ?')) return;
+    if (!confirm('ПОДТВЕРДИТЬ УДАЛЕНИЕ?')) return;
     try {
       const { error } = await supabase!.from('tasks').delete().eq('id', id);
       if (error) throw error;
@@ -279,7 +279,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
             );
           }) : (
             <div className="p-12 text-center text-gray-600 italic text-xs uppercase tracking-[0.3em]">
-              Директивы отсутствуют или у вас недостаточно прав для их просмотра.
+              Задания отсутствуют или у вас недостаточно прав для их просмотра.
             </div>
           )}
         </div>
@@ -343,7 +343,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentClearance, currentUser }) 
               </div>
 
               <div className="space-y-1">
-                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Описание директивы</label>
+                <label className="text-[9px] text-gray-500 uppercase tracking-widest">Описание задания</label>
                 <textarea 
                   required
                   rows={4}
