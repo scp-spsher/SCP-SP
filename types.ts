@@ -78,9 +78,8 @@ export interface SCPTask {
   id: string;
   title: string;
   description: string;
-  assigned_to: string; // UUID of personnel
-  assigned_name?: string;
-  created_by: string; // UUID of creator
+  assigned_department: string; // Заменено с assigned_to (UUID) на отдел
+  created_by: string; // UUID создателя
   priority: TaskPriority;
   status: TaskStatus;
   created_at: string;
