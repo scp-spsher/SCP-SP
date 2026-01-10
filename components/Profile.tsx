@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { StoredUser, authService } from '../services/authService';
-import { User, Shield, MapPin, Briefcase, Crown, Upload, Camera, ArrowLeft, Edit3, Check, X, RefreshCw } from 'lucide-react';
+import { User, Shield, MapPin, Briefcase, Crown, Upload, Camera, ArrowLeft, Edit3, Check, X, RefreshCw, EyeOff } from 'lucide-react';
 import { SCPLogo } from './SCPLogo';
 
 const SECRET_ADMIN_ID = '36046d5d-dde4-4cf6-a2de-794334b7af5c';
@@ -21,7 +21,6 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ТАЙНАЯ ЛОГИКА МАСКИРОВКИ ДЛЯ UI (только для уровня допуска)
   const displayClearance = useMemo(() => {
     if (user?.id === SECRET_ADMIN_ID && currentClearance === 6) {
       return 4;
@@ -31,6 +30,26 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
 
   const isSimulatedO5 = currentClearance >= 5;
   const isDisplayingAdmin = displayClearance === 6;
+
+  // Логика отображения отдела
+  const departmentInfo = useMemo(() => {
+    const isOVB = user.department === 'ОВБ';
+    
+    // Если смотрит O5/Админ или сам сотрудник — видит правду
+    if (isSimulatedO5 || isViewingSelf) {
+      return {
+        label: user.department || 'НЕ УКАЗАНО',
+        isMasked: isOVB,
+        real: isOVB ? `ОВБ [ПОД ПРИКРЫТИЕМ: ${user.cover_department || 'НЕТ'}]` : user.department
+      };
+    }
+
+    // Ообычный персонал видит только прикрытие, если это ОВБ
+    return {
+      label: (isOVB ? user.cover_department : user.department) || 'НЕ УКАЗАНО',
+      isMasked: false
+    };
+  }, [user, isSimulatedO5, isViewingSelf]);
 
   const cardColor = isSimulatedO5 ? 'border-yellow-500' : 'border-gray-600';
   const textColor = isSimulatedO5 ? 'text-yellow-500' : 'text-scp-text';
@@ -211,9 +230,16 @@ const Profile: React.FC<ProfileProps> = ({ user, currentClearance, onProfileUpda
                 </div>
                 <div>
                   <label className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><Shield size={10} /> Отдел</label>
-                  <div className="text-sm text-gray-300 font-mono">
-                     {user.department || (isDisplayingAdmin ? 'Командование О5' : (isSimulatedO5 ? 'Совет О5' : 'Общие обязанности'))}
+                  <div className={`text-sm font-mono flex items-center gap-1 ${departmentInfo.isMasked ? 'text-red-500' : 'text-gray-300'}`}>
+                     {departmentInfo.label}
+                     {/* Fix: Removed invalid 'title' prop from EyeOff icon */}
+                     {departmentInfo.isMasked && <EyeOff size={10} />}
                   </div>
+                  {departmentInfo.real && isSimulatedO5 && (
+                    <div className="text-[8px] text-gray-600 uppercase mt-0.5 font-mono">
+                      [Verified: {user.department}]
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
