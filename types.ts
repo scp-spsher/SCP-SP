@@ -11,10 +11,23 @@ export const SecurityClearance = {
 
 export type SecurityClearance = typeof SecurityClearance[keyof typeof SecurityClearance];
 
+export const DEPARTMENTS = [
+  'Научная Служба',
+  'Служба Безопасности',
+  'Обслуживающий Персонал',
+  'Мед Служба',
+  'МОГ',
+  'ОВБ'
+] as const;
+
+export type Department = typeof DEPARTMENTS[number];
+
 export interface UserProfile {
   id: string;
   name: string;
   title: string;
+  department: string;
+  cover_department?: string;
   clearance: SecurityClearance;
   site: string;
 }
