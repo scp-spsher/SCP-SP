@@ -11,6 +11,7 @@ import Reports from './components/Reports';
 import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
 import AdminChat from './components/AdminChat';
+import GeneralChat from './components/GeneralChat';
 import Guide from './components/Guide';
 import { authService, StoredUser } from './services/authService';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
@@ -149,6 +150,7 @@ const App: React.FC = () => {
         />
       );
       case 'messages': return <AdminChat currentUser={currentUser} />;
+      case 'general_chat': return <GeneralChat currentUser={currentUser} onViewProfile={handleViewProfile} />;
       case 'guide': return <Guide currentClearance={safeClearance} />;
       case 'database': return <Database />;
       case 'comms': return <SecureChat />;
