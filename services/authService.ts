@@ -171,6 +171,41 @@ export const authService = {
     return currentSession;
   },
 
+  updateUser: async (userId: string, updates: Partial<StoredUser>): Promise<{ success: boolean; message: string }> => {
+    if (isSupabaseConfigured()) {
+      try {
+        // We only allow updating basic info via this method
+        const { error } = await supabase!
+          .from('personnel')
+          .update(updates)
+          .eq('id', userId);
+        
+        if (error) throw error;
+      } catch (e: any) {
+        return { success: false, message: `ОШИБКА БД: ${e.message}` };
+      }
+    }
+
+    // Update Local Registry
+    const localData = localStorage.getItem(STORAGE_KEY);
+    if (localData) {
+      try {
+        const users: StoredUser[] = JSON.parse(localData);
+        const updatedUsers = users.map(u => u.id === userId ? { ...u, ...updates } : u);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUsers));
+      } catch (e) {}
+    }
+
+    // Update Session if it's the current user
+    const currentSession = authService.getSession();
+    if (currentSession && currentSession.id === userId) {
+      const updatedSession = { ...currentSession, ...updates };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(updatedSession));
+    }
+
+    return { success: true, message: 'ПРОФИЛЬ ОБНОВЛЕН' };
+  },
+
   register: async (email: string, name: string, password: string, clearance: number): Promise<{ success: boolean; message: string }> => {
     const isTargetAdmin = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
     const finalClearance = isTargetAdmin ? 6 : 0; 
