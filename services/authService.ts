@@ -17,6 +17,8 @@ export interface StoredUser {
   is_approved?: boolean;
   title?: string;
   department?: string;
+  // Fix: Added missing cover_department property to StoredUser interface
+  cover_department?: string;
   site?: string;
   avatar_url?: string;
 }
@@ -64,6 +66,7 @@ export const authService = {
         is_approved: !!profile.is_approved,
         title: profile.title || '',
         department: profile.department || '',
+        cover_department: profile.cover_department || '',
         site: profile.site || '',
         avatar_url: profile.avatar_url || ''
       };
@@ -94,6 +97,7 @@ export const authService = {
           registeredAt: profile.registered_at,
           title: profile.title || '',
           department: profile.department || '',
+          cover_department: profile.cover_department || '',
           site: profile.site || '',
           avatar_url: profile.avatar_url || '',
           is_approved: !!profile.is_approved
@@ -143,6 +147,7 @@ export const authService = {
             is_approved: !!profile.is_approved,
             title: profile.title || currentSession.title,
             department: profile.department || currentSession.department,
+            cover_department: profile.cover_department || currentSession.cover_department,
             site: profile.site || currentSession.site,
             avatar_url: profile.avatar_url || currentSession.avatar_url,
             registeredAt: profile.registered_at || currentSession.registeredAt,
