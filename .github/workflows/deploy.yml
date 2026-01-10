@@ -1,4 +1,8 @@
 name: Deploy to GitHub Pages
+# Разрешить только один текущий деплой, прерывая предыдущие, если они еще запущены
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 on:
   push:
     branches: [main] # Убедись, что твоя ветка называется именно main!
