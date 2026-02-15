@@ -7,7 +7,7 @@ interface GuideProps {
 }
 
 const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'objects' | 'clearance'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'objects' | 'clearance' | 'chambers'>('general');
 
   // Вспомогательная функция для цензуры текста
   const Redact = ({ text, minLevel, placeholder = "[ДАННЫЕ УДАЛЕНЫ]" }: { text: string, minLevel: number, placeholder?: string }) => {
@@ -440,6 +440,150 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
     );
   };
 
+  const renderContainmentChambers = () => {
+    if (currentClearance < 2) {
+      return (
+        <div className="flex flex-col items-center justify-center py-32 animate-in fade-in duration-700">
+          <div className="p-8 border-2 border-red-900 bg-red-950/10 flex flex-col items-center gap-6 shadow-[0_0_50px_rgba(153,27,27,0.2)]">
+            <Lock size={64} className="text-red-600 animate-pulse" />
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-black text-red-500 uppercase tracking-[0.3em]">Доступ запрещен</h2>
+              <p className="text-xs text-gray-500 uppercase tracking-widest font-mono">Требуется уровень допуска 2 или выше</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        <div className="max-w-4xl mx-auto bg-white/5 border border-gray-800 p-8 md:p-12 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.02] pointer-events-none">
+            <SCPLogo className="w-[500px] h-[500px]" />
+          </div>
+
+          <header className="border-b-2 border-scp-text pb-8 mb-10 text-center relative z-10">
+            <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 font-serif">Камеры содержания</h1>
+            <div className="flex items-center justify-center gap-4 text-xs text-gray-500 uppercase tracking-widest font-mono">
+              <span>Архивный файл: CNT-CELL-02</span>
+              <span className="w-1 h-1 bg-gray-700 rounded-full"></span>
+              <span>Допуск: <Redact text="Уровень 2+" minLevel={2} placeholder="ОГРАНИЧЕНО" /></span>
+            </div>
+          </header>
+
+          <article className="space-y-8 text-gray-300 font-serif leading-relaxed text-base relative z-10">
+            <section className="space-y-4 bg-black/40 border border-gray-700 p-6 shadow-inner">
+              <h2 className="text-2xl font-black text-white uppercase border-l-4 border-scp-terminal pl-4 font-mono">Стандартные условия содержания гуманоидных объектов</h2>
+              <p className="text-sm text-gray-400">Назначение камер и общие рекомендации.</p>
+              <p className="text-sm">
+                С целью сократить издержки и трудозатраты на разработку условий содержания каждого вновь обнаруженного SCP-объекта, для распространенного класса SCP-гуманоидов, то есть, аномальных субъектов, обладающих строением, физиологией и основными потребностями, близкими к таковым для обычных представителей Homo sapiens, Организацией разработаны стандартные условия содержания и стандартные камеры, которые обеспечивают жилищные условия, отвечающие как требованиям безопасного содержания SCP-объектов, так и базовым нормам комфорта и этичного обращения с разумными существами.
+              </p>
+              <p className="text-sm">
+                Стандартные камеры содержания спроектированы таким образом, чтобы при минимальной доработке или вовсе без таковой подходить для содержания подавляющего большинства малоопасных объектов, для чего, после всестороннего изучения накопленного Организацией опыта, в их конструкцию были изначально интегрированы общие решения, наиболее широко применяемые для противодействия аномальным эффектам самой разной природы.
+              </p>
+              <p className="text-sm">
+                Стандартные камеры типа С-1 предназначены для постоянного содержания гуманоидных объектов, характеризуемых следующими особенностями: повышенная опасность и деструктивный потенциал (особо высокая физическая сила, модификации тела встроенными средствами нападения, опасные излучения и выделения и т.п.), агрессивное или враждебное поведение, как намеренное, так и нет (искаженное восприятие действительности, психические отклонения, недостаточный самоконтроль или подверженность стороннему контролю), явная нелояльность, злостное неподчинение сотрудникам и несоблюдение требований режима содержания (рассматривается как дисциплинарная мера).
+              </p>
+              <p className="text-sm">
+                Камеры типа С-2 предназначены для постоянного содержания гуманоидных объектов, которые не склонны оказывать противодействие. Как правило, они являются жертвами собственных аномальных особенностей, а потому заинтересованы и готовы оказывать содействие в их подавлении или нейтрализации последствий, либо относятся к бывшим сотрудникам Организации, подпавшим под различные аномальные воздействия, чья лояльность не вызывает особых сомнений. Перевод в камеру типа С-2 рекомендован после завершения цикла первичных исследований. Разрешается при условии неагрессивного/дружественного поведения, отсутствия опасных физических и психических отклонений.
+              </p>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-2xl font-black text-white uppercase border-l-4 border-scp-accent pl-4 font-mono">Камера повышенной безопасности (Тип С-1)</h2>
+              <div className="p-4 border border-dashed border-gray-700 bg-black/30 text-center">
+                <p className="text-xs uppercase tracking-widest text-gray-500 font-mono">s-1.jpg</p>
+                <p className="text-sm text-gray-300 mt-1">Макет камеры С-1</p>
+              </div>
+              <div className="p-5 border border-gray-800 bg-black/25 space-y-3 text-sm">
+                <p><span className="text-white font-bold">Размеры:</span> длина 4 м, ширина 3 м, высота 3 м.</p>
+                <p><span className="text-white font-bold">Конструкция:</span> стены, пол и потолок из железобетона с креплениями для навесных защитных панелей (свинцовые, мягкие и т.д.). Освещение и видеонаблюдение на потолке под бронестеклом, с креплениями для светофильтров. Встроены дополнительные скрытые микрофоны. На стене у входа установлен интерком.</p>
+                <p><span className="text-white font-bold">Пожаротушение:</span> спринклерная система.</p>
+                <p><span className="text-white font-bold">Вентиляция:</span> венткороб 15x15 см в потолке; поддерживается перенаправление воздуха в фильтровентиляционную систему и подача газообразных транквилизаторов.</p>
+                <p><span className="text-white font-bold">Сантехника:</span> металлическая раковина (вода по кнопке), металлический встроенный унитаз.</p>
+                <p><span className="text-white font-bold">Душ:</span> в углу, с плёночной занавеской; лейка в потолке, включение по кнопке; слив закрыт решёткой, сток может идти в фильтрующую систему.</p>
+                <p><span className="text-white font-bold">Мебель:</span> бетонное возвышение-кровать (0.7 x 1.5 x 2.2 м), откидной столик из АБС-пластика без ножек; постельные и банные принадлежности по решению персонала.</p>
+                <p><span className="text-white font-bold">Мусоропровод:</span> люк в стене, отвод в шахту мусоросжигателя; возможна блокировка решеткой для проверки.</p>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-2xl font-black text-white uppercase border-l-4 border-scp-accent pl-4 font-mono">Камера повышенной комфортности (Тип С-2)</h2>
+              <div className="p-4 border border-dashed border-gray-700 bg-black/30 text-center">
+                <p className="text-xs uppercase tracking-widest text-gray-500 font-mono">S-2.jpg</p>
+                <p className="text-sm text-gray-300 mt-1">Макет камеры С-2</p>
+              </div>
+              <div className="p-5 border border-gray-800 bg-black/25 space-y-3 text-sm">
+                <p><span className="text-white font-bold">Планировка:</span> жилой блок 5x3 м и ванная 2x2 м, высота потолков 3 м.</p>
+                <p><span className="text-white font-bold">Конструкция:</span> железобетон с креплениями для защитных панелей. Допускаются крашеные стены/обои в жилой зоне; ванная — только окраска. Пол: линолеум в жилой комнате, кафель в ванной.</p>
+                <p><span className="text-white font-bold">Вентиляция:</span> венткороб 15x15 см в потолке с решеткой; возможно перенаправление воздуха в фильтровентиляцию и подача газообразных транквилизаторов.</p>
+                <p><span className="text-white font-bold">Ванная:</span> совмещенный санузел, душевая кабина, стальная раковина с шаровым смесителем, зеркало из акрилового ПММА, пластиковая полка; сток может направляться в фильтрующую систему.</p>
+                <p><span className="text-white font-bold">Контроль:</span> освещение и камеры на потолке, крепления под светофильтры, интерком у входа.</p>
+                <p><span className="text-white font-bold">Пожаротушение:</span> спринклерная система.</p>
+                <p><span className="text-white font-bold">Мебель и оснащение:</span> стальная кровать с матрасом, привинченная к полу; два стула, письменный и кофейный столик из АБС-пластика; тумбочка, шкафчик, стеллаж; телеэкран в нише под бронестеклом, DVD-плеер, аудиосистема.</p>
+                <p><span className="text-white font-bold">Мусоропровод:</span> люк в стене.</p>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-2xl font-black text-white uppercase border-l-4 border-gray-600 pl-4 font-mono">Оборудование шлюзовых камер</h2>
+              <div className="p-5 border border-gray-800 bg-black/25 text-sm">
+                Перед входом в камеры типов С-1 и С-2 находятся герметичные шлюзовые камеры. В каждой находится набор для экстренной дезинфекции персонала. В отдельном отсеке, маркированном красным крестом, хранится оборудование для экстренной медицинской помощи: анестезиологические и реанимационные препараты, травматологический и реанимационный наборы, запас крови для переливания.
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-2xl font-black text-white uppercase border-l-4 border-gray-600 pl-4 font-mono">Бытовые аспекты</h2>
+              <div className="p-5 border border-gray-800 bg-black/25 text-sm space-y-2">
+                <p>Питание выдается 3 раза в сутки; посуда и приборы только пластиковые.</p>
+                <p>Уборка: С-1 — раз в месяц, С-2 — раз в две недели силами персонала или самим объектом при согласии.</p>
+                <p>Одежда: красная роба с номером объекта (формат: Безопасный/Евклид/Кетер SCP-***), ХБ ткань; 1 комплект раз в 2 недели.</p>
+                <p>Обувь: тапочки подводника, 1 пара раз в 6 месяцев.</p>
+                <p>Постельное белье меняется ежемесячно; выдается 4 полотенца на месяц; гигиенические принадлежности пополняются при уборке.</p>
+                <p>Разрешены книги, диски с фильмами/музыкой; перечень утверждает куратор объекта.</p>
+                <p>Курящим выдаются никотиновые пластыри.</p>
+                <p>Медосмотр: 1 раз в месяц; оценка психолога Фонда: 1 раз в 3 месяца.</p>
+                <p>Вода, освещение и электроприборы (все или отдельно) могут быть отключены с поста охраны.</p>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-2xl font-black text-white uppercase border-l-4 border-scp-text pl-4 font-mono">Права и обязанности объекта</h2>
+              <div className="p-5 border border-gray-800 bg-black/25 text-sm space-y-3">
+                <h3 className="text-white font-black uppercase">Имеет право</h3>
+                <p>Использовать по назначению оборудование камеры.</p>
+                <p>Подать жалобу на неправомерные действия персонала Фонда; заявления направляются в Комитет по этике.</p>
+                <p>Подавать одну заявку в месяц на улучшение условий пребывания (развлекательная продукция, доп. гигиенические принадлежности, нестандартная одежда и обувь).</p>
+                <p>Подавать одну заявку в месяц на услуги парикмахера.</p>
+                <p>Подавать одну заявку в неделю на изменение меню питания.</p>
+                <p>Все заявки рассматриваются куратором объекта, который принимает решение об исполнении или запрете.</p>
+                <h3 className="text-white font-black uppercase pt-2">Обязан</h3>
+                <p>Беспрекословно подчиняться приказам персонала Фонда (кроме обслуживающего персонала; попытки мешать их работе считаются нарушением УС и пресекаются службой безопасности).</p>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-2xl font-black text-white uppercase border-l-4 border-red-800 pl-4 font-mono">Дисциплинарные взыскания</h2>
+              <div className="p-5 border border-red-900/60 bg-red-950/10 text-sm space-y-2">
+                <p>Неподчинение приказам, нарушение правил поведения, повреждение имущества Фонда, агрессия к сотрудникам наказываются ужесточением условий содержания:</p>
+                <p>Перевод в камеру типа С-1.</p>
+                <p>Прекращение приема личных запросов.</p>
+                <p>Запрет развлекательной продукции.</p>
+                <p>В случае рецидивов — перевод в состояние искусственной комы (требует согласования с КпЭ, куратором объекта, начальником Зоны и одним представителем Совета О5).</p>
+                <p>Попытки побега считаются нарушением условий содержания и караются по протоколу конкретного объекта.</p>
+              </div>
+            </section>
+          </article>
+
+          <footer className="mt-16 pt-8 border-t border-gray-800 flex justify-between items-center opacity-40">
+            <div className="text-[9px] font-mono uppercase tracking-widest">SCPNET SECURE DOC // CONTAINMENT-CELLS</div>
+            <div className="w-8 h-8"><SCPLogo /></div>
+          </footer>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full gap-6">
       <div className="flex items-center justify-between border-b border-gray-800 pb-4">
@@ -485,6 +629,16 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
             </div>
             <ChevronRight size={14} />
           </button>
+          <button
+            onClick={() => setActiveTab('chambers')}
+            className={`w-full flex items-center justify-between p-4 border transition-all ${activeTab === 'chambers' ? 'bg-scp-terminal text-black border-scp-terminal font-bold' : 'bg-transparent text-gray-500 border-gray-800 hover:text-white hover:border-gray-600'}`}
+          >
+            <div className="flex items-center gap-3">
+              <Archive size={16} />
+              <span className="text-xs uppercase tracking-widest font-mono">Камеры содержания</span>
+            </div>
+            <ChevronRight size={14} />
+          </button>
           <button 
             className="w-full flex items-center justify-between p-4 border border-gray-800 text-gray-700 cursor-not-allowed opacity-50"
             disabled
@@ -502,6 +656,7 @@ const Guide: React.FC<GuideProps> = ({ currentClearance }) => {
           {activeTab === 'general' && renderGeneralInfo()}
           {activeTab === 'objects' && renderObjectClasses()}
           {activeTab === 'clearance' && renderClearanceRegistry()}
+          {activeTab === 'chambers' && renderContainmentChambers()}
         </div>
       </div>
     </div>
