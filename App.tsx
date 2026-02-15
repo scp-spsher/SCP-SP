@@ -5,7 +5,6 @@ import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Database from './components/Database';
-import SecureChat from './components/SecureChat';
 import TerminalComponent from './components/Terminal';
 import Reports from './components/Reports';
 import Profile from './components/Profile';
@@ -153,7 +152,6 @@ const App: React.FC = () => {
       case 'general_chat': return <GeneralChat currentUser={currentUser} onViewProfile={handleViewProfile} />;
       case 'guide': return <Guide currentClearance={safeClearance} />;
       case 'database': return <Database />;
-      case 'comms': return <SecureChat />;
       case 'terminal': return <TerminalComponent />;
       case 'reports': return <Reports user={currentUser} effectiveClearance={safeClearance} onViewProfile={handleViewProfile} />;
       case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} onViewProfile={handleViewProfile} />;
