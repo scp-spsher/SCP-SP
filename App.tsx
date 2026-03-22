@@ -16,12 +16,29 @@ import { authService, StoredUser } from './services/authService';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 
 const ADMIN_POOL_ID = '00000000-0000-0000-0000-000000000000';
+const ARCHIVE_BASE_PATH = '/archive';
+
+const extractScpSlugFromPath = (pathname: string): string | null => {
+  const segments = pathname.split('/').filter(Boolean);
+  if (!segments.length) return null;
+  const candidate = segments[segments.length - 1].toUpperCase();
+  return /^SCP-[A-Z0-9-]+$/.test(candidate) ? candidate : null;
+};
+
+const pushPathIfChanged = (path: string) => {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname !== path) {
+    window.history.pushState({}, '', path);
+  }
+};
 
 const App: React.FC = () => {
+  const initialSlugFromPath = typeof window !== 'undefined' ? extractScpSlugFromPath(window.location.pathname) : null;
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
   const [viewedUser, setViewedUser] = useState<StoredUser | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [currentPage, setCurrentPage] = useState(initialSlugFromPath ? 'database' : 'dashboard');
+  const [archiveRouteSlug, setArchiveRouteSlug] = useState<string | null>(initialSlugFromPath);
   const [simulatedClearance, setSimulatedClearance] = useState<number>(0);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -30,7 +47,9 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setViewedUser(null);
     setCurrentPage('dashboard');
+    setArchiveRouteSlug(null);
     setSimulatedClearance(0);
+    pushPathIfChanged('/');
   }, []);
 
   useEffect(() => {
@@ -90,7 +109,7 @@ const App: React.FC = () => {
   const handleLogin = (user: StoredUser) => {
     setCurrentUser(user);
     setSimulatedClearance(user.isSuperAdmin ? 6 : Number(user.clearance || 0));
-    setCurrentPage('dashboard');
+    setCurrentPage(archiveRouteSlug ? 'database' : 'dashboard');
   };
 
   const handleProfileUpdate = (updatedUser: StoredUser) => {
@@ -117,8 +136,44 @@ const App: React.FC = () => {
   const handleNavigate = (page: string) => {
       if (page === 'profile') setViewedUser(null);
       if (page === 'messages') setUnreadCount(0);
+      if (page !== 'database') {
+        setArchiveRouteSlug(null);
+        pushPathIfChanged('/');
+      } else if (!archiveRouteSlug) {
+        pushPathIfChanged(ARCHIVE_BASE_PATH);
+      }
       setCurrentPage(page);
   };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const slug = extractScpSlugFromPath(window.location.pathname);
+      if (slug) {
+        setArchiveRouteSlug(slug);
+        setCurrentPage('database');
+        return;
+      }
+
+      setArchiveRouteSlug(null);
+      if (window.location.pathname === ARCHIVE_BASE_PATH) {
+        setCurrentPage('database');
+      } else {
+        setCurrentPage('dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleArticleRouteChange = useCallback((slug: string | null) => {
+    setArchiveRouteSlug(slug);
+    if (slug) {
+      pushPathIfChanged(`/${slug}`);
+      return;
+    }
+    pushPathIfChanged(ARCHIVE_BASE_PATH);
+  }, []);
 
   if (isLoadingSession) {
     return (
@@ -151,7 +206,13 @@ const App: React.FC = () => {
       case 'messages': return <AdminChat currentUser={currentUser} />;
       case 'general_chat': return <GeneralChat currentUser={currentUser} onViewProfile={handleViewProfile} />;
       case 'guide': return <Guide currentClearance={safeClearance} />;
-      case 'database': return <Database />;
+      case 'database': return (
+        <Database
+          currentUser={currentUser}
+          routeSlug={archiveRouteSlug}
+          onArticleRouteChange={handleArticleRouteChange}
+        />
+      );
       case 'terminal': return <TerminalComponent />;
       case 'reports': return <Reports user={currentUser} effectiveClearance={safeClearance} onViewProfile={handleViewProfile} />;
       case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} onViewProfile={handleViewProfile} />;
