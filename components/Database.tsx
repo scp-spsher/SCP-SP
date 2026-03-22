@@ -388,6 +388,12 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
     }
   };
 
+  const onSaveClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void handleSave();
+  };
+
   const articleUrl = selectedArticle ? `${window.location.origin}/${selectedArticle.slug}` : '';
 
   return (
@@ -513,16 +519,17 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
 
               <div className="border border-gray-700 bg-black">
                 <div className="flex flex-wrap items-center gap-2 border-b border-gray-800 p-2">
-                  <button className="p-1.5 hover:bg-gray-800" onClick={() => execEditorCommand('bold')} title="Жирный">
+                  <button type="button" className="p-1.5 hover:bg-gray-800" onClick={() => execEditorCommand('bold')} title="Жирный">
                     <Bold size={16} />
                   </button>
-                  <button className="p-1.5 hover:bg-gray-800" onClick={() => execEditorCommand('italic')} title="Курсив">
+                  <button type="button" className="p-1.5 hover:bg-gray-800" onClick={() => execEditorCommand('italic')} title="Курсив">
                     <Italic size={16} />
                   </button>
-                  <button className="p-1.5 hover:bg-gray-800" onClick={() => execEditorCommand('underline')} title="Подчеркнутый">
+                  <button type="button" className="p-1.5 hover:bg-gray-800" onClick={() => execEditorCommand('underline')} title="Подчеркнутый">
                     <Underline size={16} />
                   </button>
                   <button
+                    type="button"
                     className="p-1.5 hover:bg-gray-800"
                     onClick={() => execEditorCommand('insertUnorderedList')}
                     title="Маркированный список"
@@ -530,19 +537,20 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
                     <List size={16} />
                   </button>
                   <button
+                    type="button"
                     className="p-1.5 hover:bg-gray-800"
                     onClick={() => execEditorCommand('insertOrderedList')}
                     title="Нумерованный список"
                   >
                     <ListOrdered size={16} />
                   </button>
-                  <button className="p-1.5 hover:bg-gray-800" onClick={addLink} title="Ссылка">
+                  <button type="button" className="p-1.5 hover:bg-gray-800" onClick={addLink} title="Ссылка">
                     <LinkIcon size={16} />
                   </button>
-                  <button className="p-1.5 hover:bg-gray-800 text-xs px-2" onClick={() => execEditorCommand('formatBlock', 'h3')}>
+                  <button type="button" className="p-1.5 hover:bg-gray-800 text-xs px-2" onClick={() => execEditorCommand('formatBlock', 'h3')}>
                     H3
                   </button>
-                  <button className="p-1.5 hover:bg-gray-800 text-xs px-2" onClick={() => execEditorCommand('formatBlock', 'p')}>
+                  <button type="button" className="p-1.5 hover:bg-gray-800 text-xs px-2" onClick={() => execEditorCommand('formatBlock', 'p')}>
                     P
                   </button>
                 </div>
@@ -558,7 +566,8 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleSave}
+                  type="button"
+                  onClick={onSaveClick}
                   disabled={isSaving}
                   className="px-4 py-2 border border-scp-terminal text-scp-terminal text-xs uppercase tracking-widest hover:bg-scp-terminal hover:text-black transition-colors disabled:opacity-60 flex items-center gap-2"
                 >
@@ -566,11 +575,13 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
                   Сохранить
                 </button>
                 <button
+                  type="button"
                   onClick={cancelEditor}
                   className="px-4 py-2 border border-gray-700 text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors"
                 >
                   Отмена
                 </button>
+                {isSaving && <span className="text-xs text-gray-400 uppercase">Сохранение...</span>}
               </div>
             </div>
           )}
