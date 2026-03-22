@@ -120,6 +120,7 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [mode, setMode] = useState<EditorMode>('view');
@@ -238,12 +239,14 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
     setMode('create');
     setSelectedSlug(null);
     onArticleRouteChange?.(null);
+    setSaveMessage(null);
     resetEditor();
   };
 
   const startEdit = () => {
     if (!selectedArticle) return;
     setMode('edit');
+    setSaveMessage(null);
     setSlugInput(selectedArticle.slug);
     setTitle(selectedArticle.title);
     setSummary(selectedArticle.summary);
@@ -282,9 +285,11 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
   };
 
   const handleSave = async () => {
+    setSaveMessage(null);
     const normalizedSlug = normalizeScpSlug(slugInput);
     if (!normalizedSlug) {
       setError('Введите корректный идентификатор, например SCP-173.');
+      setSaveMessage('Сохранение не выполнено.');
       return;
     }
 
@@ -292,6 +297,7 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
     const sanitized = sanitizeRichText(editorRef.current?.innerHTML || editorHtml || '');
     if (!stripHtml(sanitized)) {
       setError('Текст статьи не может быть пустым.');
+      setSaveMessage('Сохранение не выполнено.');
       return;
     }
 
@@ -331,6 +337,7 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
         setSelectedSlug(saved.slug);
         onArticleRouteChange?.(saved.slug);
         await loadArticles(false);
+        setSaveMessage(`Статья ${saved.slug} сохранена.`);
       } else {
         const payload = {
           slug: normalizedSlug,
@@ -379,16 +386,18 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
         setMode('view');
         setSelectedSlug(normalizedSlug);
         onArticleRouteChange?.(normalizedSlug);
+        setSaveMessage(`Статья ${normalizedSlug} сохранена (локально).`);
       }
     } catch (e: any) {
       const code = e?.code ? ` [${e.code}]` : '';
       setError(`Ошибка сохранения${code}: ${e?.message || 'неизвестно'}`);
+      setSaveMessage('Сохранение не выполнено.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const onSaveClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const onEditorSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     e.stopPropagation();
     void handleSave();
@@ -466,7 +475,7 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
           )}
 
           {(mode === 'create' || mode === 'edit') && (
-            <div className="space-y-4">
+            <form className="space-y-4" onSubmit={onEditorSubmit}>
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold uppercase tracking-wider">
                   {mode === 'create' ? 'Создание статьи' : `Редактирование ${selectedArticle?.slug || ''}`}
@@ -567,7 +576,7 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={onSaveClick}
+                  onClick={() => void handleSave()}
                   disabled={isSaving}
                   className="px-4 py-2 border border-scp-terminal text-scp-terminal text-xs uppercase tracking-widest hover:bg-scp-terminal hover:text-black transition-colors disabled:opacity-60 flex items-center gap-2"
                 >
@@ -582,8 +591,9 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
                   Отмена
                 </button>
                 {isSaving && <span className="text-xs text-gray-400 uppercase">Сохранение...</span>}
+                {saveMessage && <span className="text-xs text-scp-terminal uppercase">{saveMessage}</span>}
               </div>
-            </div>
+          </form>
           )}
 
           {mode === 'view' && selectedArticle && (
