@@ -16,36 +16,12 @@ import { authService, StoredUser } from './services/authService';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 
 const ADMIN_POOL_ID = '00000000-0000-0000-0000-000000000000';
-const ARCHIVE_ROUTE_SEGMENT = 'archive';
-const APP_BASE_PATH = '/SCP-SP';
-
-const stripBasePath = (pathname: string): string => {
-  if (pathname.startsWith(APP_BASE_PATH)) {
-    const trimmed = pathname.slice(APP_BASE_PATH.length);
-    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  }
-  return pathname;
-};
-
-const extractScpSlugFromPath = (pathname: string): string | null => {
-  const segments = stripBasePath(pathname).split('/').filter(Boolean);
-  if (!segments.length) return null;
-  const candidate = segments[segments.length - 1].toUpperCase();
-  return /^SCP-[A-Z0-9-]+$/.test(candidate) ? candidate : null;
-};
-
-const buildPath = (routeSegment?: string) => {
-  if (!routeSegment) return `${APP_BASE_PATH}/`;
-  return `${APP_BASE_PATH}/${routeSegment}`.replace(/\/{2,}/g, '/');
-};
 
 const App: React.FC = () => {
-  const initialSlugFromPath = typeof window !== 'undefined' ? extractScpSlugFromPath(window.location.pathname) : null;
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
   const [viewedUser, setViewedUser] = useState<StoredUser | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
-  const [currentPage, setCurrentPage] = useState(initialSlugFromPath ? 'database' : 'dashboard');
-  const [archiveRouteSlug, setArchiveRouteSlug] = useState<string | null>(initialSlugFromPath);
+  const [currentPage, setCurrentPage] = useState('dashboard');
   const [simulatedClearance, setSimulatedClearance] = useState<number>(0);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -54,12 +30,7 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setViewedUser(null);
     setCurrentPage('dashboard');
-    setArchiveRouteSlug(null);
     setSimulatedClearance(0);
-    const target = buildPath();
-    if (typeof window !== 'undefined' && window.location.pathname !== target) {
-      window.history.pushState({}, '', target);
-    }
   }, []);
 
   useEffect(() => {
@@ -119,7 +90,7 @@ const App: React.FC = () => {
   const handleLogin = (user: StoredUser) => {
     setCurrentUser(user);
     setSimulatedClearance(user.isSuperAdmin ? 6 : Number(user.clearance || 0));
-    setCurrentPage(archiveRouteSlug ? 'database' : 'dashboard');
+    setCurrentPage('dashboard');
   };
 
   const handleProfileUpdate = (updatedUser: StoredUser) => {
@@ -146,56 +117,8 @@ const App: React.FC = () => {
   const handleNavigate = (page: string) => {
       if (page === 'profile') setViewedUser(null);
       if (page === 'messages') setUnreadCount(0);
-      if (page !== 'database') {
-        setArchiveRouteSlug(null);
-        const target = buildPath();
-        if (window.location.pathname !== target) {
-          window.history.pushState({}, '', target);
-        }
-      } else if (!archiveRouteSlug) {
-        const target = buildPath(ARCHIVE_ROUTE_SEGMENT);
-        if (window.location.pathname !== target) {
-          window.history.pushState({}, '', target);
-        }
-      }
       setCurrentPage(page);
   };
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const slug = extractScpSlugFromPath(window.location.pathname);
-      if (slug) {
-        setArchiveRouteSlug(slug);
-        setCurrentPage('database');
-        return;
-      }
-
-      setArchiveRouteSlug(null);
-      if (window.location.pathname === buildPath(ARCHIVE_ROUTE_SEGMENT)) {
-        setCurrentPage('database');
-      } else {
-        setCurrentPage('dashboard');
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  const handleArticleRouteChange = useCallback((slug: string | null) => {
-    setArchiveRouteSlug(slug);
-    if (slug) {
-      const target = buildPath(slug);
-      if (window.location.pathname !== target) {
-        window.history.pushState({}, '', target);
-      }
-      return;
-    }
-    const target = buildPath(ARCHIVE_ROUTE_SEGMENT);
-    if (window.location.pathname !== target) {
-      window.history.pushState({}, '', target);
-    }
-  }, []);
 
   if (isLoadingSession) {
     return (
@@ -228,13 +151,7 @@ const App: React.FC = () => {
       case 'messages': return <AdminChat currentUser={currentUser} />;
       case 'general_chat': return <GeneralChat currentUser={currentUser} onViewProfile={handleViewProfile} />;
       case 'guide': return <Guide currentClearance={safeClearance} />;
-      case 'database': return (
-        <Database
-          currentUser={currentUser}
-          routeSlug={archiveRouteSlug}
-          onArticleRouteChange={handleArticleRouteChange}
-        />
-      );
+      case 'database': return <Database />;
       case 'terminal': return <TerminalComponent />;
       case 'reports': return <Reports user={currentUser} effectiveClearance={safeClearance} onViewProfile={handleViewProfile} />;
       case 'admin': return <AdminPanel currentUser={currentUser} onUserUpdate={handleProfileUpdate} onViewProfile={handleViewProfile} />;
