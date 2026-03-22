@@ -54,6 +54,19 @@ export interface SCPFile {
   lastUpdated: string;
 }
 
+export interface SCPArchiveArticle {
+  id: string;
+  slug: string;
+  title: string;
+  object_class: ObjectClass;
+  summary: string;
+  content_html: string;
+  author_id: string;
+  author_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SCPNews {
   id: string;
   title: string;
