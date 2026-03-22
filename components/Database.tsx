@@ -190,7 +190,7 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
 
     const channel = supabase!
       .channel('scp-archive-feed')
-      .on({ event: '*', schema: 'public', table: 'scp_articles' }, () => loadArticles(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scp_articles' }, () => loadArticles(false))
       .subscribe();
 
     return () => {
