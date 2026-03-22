@@ -299,18 +299,26 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
     setError(null);
 
     try {
-      const payload = {
-        slug: normalizedSlug,
-        title: normalizedTitle,
-        object_class: objectClass,
-        summary: summary.trim(),
-        content_html: sanitized,
-        author_id: currentUser.id,
-        author_name: currentUser.name,
-        updated_at: nowIso()
-      };
-
       if (isSupabaseConfigured()) {
+        const {
+          data: { session }
+        } = await supabase!.auth.getSession();
+
+        if (!session?.user?.id) {
+          throw new Error('Нет активной Supabase-сессии. Перезайдите в аккаунт.');
+        }
+
+        const payload = {
+          slug: normalizedSlug,
+          title: normalizedTitle,
+          object_class: objectClass,
+          summary: summary.trim(),
+          content_html: sanitized,
+          author_id: session.user.id,
+          author_name: currentUser.name || session.user.email || 'Unknown',
+          updated_at: nowIso()
+        };
+
         const { data, error: saveError } = await supabase!
           .from('scp_articles')
           .upsert(payload, { onConflict: 'slug' })
@@ -324,34 +332,45 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
         onArticleRouteChange?.(saved.slug);
         await loadArticles(false);
       } else {
+        const payload = {
+          slug: normalizedSlug,
+          title: normalizedTitle,
+          object_class: objectClass,
+          summary: summary.trim(),
+          content_html: sanitized,
+          author_id: currentUser.id,
+          author_name: currentUser.name,
+          updated_at: nowIso()
+        };
+
         const existing = articles.find((article) => article.slug === normalizedSlug);
         const next: SCPArchiveArticle[] = existing
           ? articles.map((article) =>
               article.slug === normalizedSlug
                 ? {
                     ...article,
-                    title: normalizedTitle,
-                    object_class: objectClass,
-                    summary: summary.trim(),
-                    content_html: sanitized,
-                    author_id: currentUser.id,
-                    author_name: currentUser.name,
-                    updated_at: nowIso()
+                    title: payload.title,
+                    object_class: payload.object_class,
+                    summary: payload.summary,
+                    content_html: payload.content_html,
+                    author_id: payload.author_id,
+                    author_name: payload.author_name,
+                    updated_at: payload.updated_at
                   }
                 : article
             )
           : [
               {
                 id: crypto.randomUUID(),
-                slug: normalizedSlug,
-                title: normalizedTitle,
-                object_class: objectClass,
-                summary: summary.trim(),
-                content_html: sanitized,
-                author_id: currentUser.id,
-                author_name: currentUser.name,
+                slug: payload.slug,
+                title: payload.title,
+                object_class: payload.object_class,
+                summary: payload.summary,
+                content_html: payload.content_html,
+                author_id: payload.author_id,
+                author_name: payload.author_name,
                 created_at: nowIso(),
-                updated_at: nowIso()
+                updated_at: payload.updated_at
               },
               ...articles
             ];
@@ -362,7 +381,8 @@ const Database: React.FC<DatabaseProps> = ({ currentUser, routeSlug, onArticleRo
         onArticleRouteChange?.(normalizedSlug);
       }
     } catch (e: any) {
-      setError(`Ошибка сохранения: ${e?.message || 'неизвестно'}`);
+      const code = e?.code ? ` [${e.code}]` : '';
+      setError(`Ошибка сохранения${code}: ${e?.message || 'неизвестно'}`);
     } finally {
       setIsSaving(false);
     }
