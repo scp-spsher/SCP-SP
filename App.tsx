@@ -16,7 +16,7 @@ import { authService, StoredUser } from './services/authService';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 
 const ADMIN_POOL_ID = '00000000-0000-0000-0000-000000000000';
-const ARCHIVE_BASE_PATH = '/archive';
+const ARCHIVE_ROUTE_SEGMENT = 'archive';
 
 const extractScpSlugFromPath = (pathname: string): string | null => {
   const segments = pathname.split('/').filter(Boolean);
@@ -25,14 +25,26 @@ const extractScpSlugFromPath = (pathname: string): string | null => {
   return /^SCP-[A-Z0-9-]+$/.test(candidate) ? candidate : null;
 };
 
-const pushPathIfChanged = (path: string) => {
-  if (typeof window === 'undefined') return;
-  if (window.location.pathname !== path) {
-    window.history.pushState({}, '', path);
+const detectBasePath = (pathname: string): string => {
+  const segments = pathname.split('/').filter(Boolean);
+  if (!segments.length) return '';
+
+  const last = segments[segments.length - 1].toUpperCase();
+  if (last === ARCHIVE_ROUTE_SEGMENT.toUpperCase() || /^SCP-[A-Z0-9-]+$/.test(last)) {
+    segments.pop();
   }
+
+  return segments.length ? `/${segments.join('/')}` : '';
+};
+
+const buildPath = (basePath: string, routeSegment?: string) => {
+  if (!routeSegment) return basePath || '/';
+  return `${basePath}/${routeSegment}`.replace(/\/{2,}/g, '/');
 };
 
 const App: React.FC = () => {
+  const initialPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+  const basePath = typeof window !== 'undefined' ? detectBasePath(initialPath) : '';
   const initialSlugFromPath = typeof window !== 'undefined' ? extractScpSlugFromPath(window.location.pathname) : null;
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(authService.getSession());
   const [viewedUser, setViewedUser] = useState<StoredUser | null>(null);
@@ -49,8 +61,11 @@ const App: React.FC = () => {
     setCurrentPage('dashboard');
     setArchiveRouteSlug(null);
     setSimulatedClearance(0);
-    pushPathIfChanged('/');
-  }, []);
+    const target = buildPath(basePath);
+    if (typeof window !== 'undefined' && window.location.pathname !== target) {
+      window.history.pushState({}, '', target);
+    }
+  }, [basePath]);
 
   useEffect(() => {
     const initApp = async () => {
@@ -138,9 +153,15 @@ const App: React.FC = () => {
       if (page === 'messages') setUnreadCount(0);
       if (page !== 'database') {
         setArchiveRouteSlug(null);
-        pushPathIfChanged('/');
+        const target = buildPath(basePath);
+        if (window.location.pathname !== target) {
+          window.history.pushState({}, '', target);
+        }
       } else if (!archiveRouteSlug) {
-        pushPathIfChanged(ARCHIVE_BASE_PATH);
+        const target = buildPath(basePath, ARCHIVE_ROUTE_SEGMENT);
+        if (window.location.pathname !== target) {
+          window.history.pushState({}, '', target);
+        }
       }
       setCurrentPage(page);
   };
@@ -155,7 +176,7 @@ const App: React.FC = () => {
       }
 
       setArchiveRouteSlug(null);
-      if (window.location.pathname === ARCHIVE_BASE_PATH) {
+      if (window.location.pathname === buildPath(basePath, ARCHIVE_ROUTE_SEGMENT)) {
         setCurrentPage('database');
       } else {
         setCurrentPage('dashboard');
@@ -164,16 +185,22 @@ const App: React.FC = () => {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [basePath]);
 
   const handleArticleRouteChange = useCallback((slug: string | null) => {
     setArchiveRouteSlug(slug);
     if (slug) {
-      pushPathIfChanged(`/${slug}`);
+      const target = buildPath(basePath, slug);
+      if (window.location.pathname !== target) {
+        window.history.pushState({}, '', target);
+      }
       return;
     }
-    pushPathIfChanged(ARCHIVE_BASE_PATH);
-  }, []);
+    const target = buildPath(basePath, ARCHIVE_ROUTE_SEGMENT);
+    if (window.location.pathname !== target) {
+      window.history.pushState({}, '', target);
+    }
+  }, [basePath]);
 
   if (isLoadingSession) {
     return (
